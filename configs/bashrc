@@ -32,6 +32,9 @@ ya() {
   rm -f -- "$tmp"
 }
 
+# Homebrew
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"
+
 # mise — runtime version manager
 eval "$(~/.local/bin/mise activate bash 2>/dev/null)" || true
 
