@@ -1,0 +1,76 @@
+# Starship — Darth Vader theme (teal + red on black)
+format = """
+[╭─](bold color:#00c8a8)\
+$os\
+$username\
+$directory\
+$git_branch\
+$git_status\
+$python\
+$nodejs\
+$rust\
+$golang\
+$docker_context\
+$cmd_duration\
+$line_break\
+[╰─](bold color:#00c8a8)\
+$character"""
+
+[os]
+disabled = false
+format = '[$symbol ](color:#00c8a8 bold)'
+
+[os.symbols]
+Linux   = ""
+Windows = ""
+
+[username]
+show_always = true
+format      = '[$user](bold color:#b0bec5)[@](color:#cc2222)[$hostname](bold color:#b0bec5) '
+
+[directory]
+format            = '[ $path](bold color:#1de9b6) '
+truncation_length = 3
+truncation_symbol = "…/"
+
+[git_branch]
+format = '[ $branch](color:#00c8a8) '
+symbol = " "
+
+[git_status]
+format    = '[$all_status$ahead_behind](color:#cc2222) '
+ahead     = "⇡${count}"
+behind    = "⇣${count}"
+diverged  = "⇕⇡${ahead_count}⇣${behind_count}"
+modified  = "!${count}"
+staged    = "+${count}"
+untracked = "?${count}"
+deleted   = "✘${count}"
+
+[python]
+format = '[${symbol}${pyenv_prefix}(${version} )(\($virtualenv\) )](color:#d4a017) '
+symbol = " "
+
+[nodejs]
+format = '[$symbol($version )](color:#4caf50) '
+symbol = " "
+
+[rust]
+format = '[$symbol($version )](color:#cc2222) '
+symbol = " "
+
+[golang]
+format = '[$symbol($version )](color:#00b4a0) '
+symbol = " "
+
+[docker_context]
+format = '[$symbol$context](color:#2196f3) '
+symbol = " "
+
+[cmd_duration]
+min_time          = 1000
+format            = '[⏱ $duration](color:#606878 dimmed) '
+
+[character]
+success_symbol = '[❯](bold color:#00c8a8)'
+error_symbol   = '[❯](bold color:#cc2222)'

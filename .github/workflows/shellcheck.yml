@@ -1,0 +1,30 @@
+name: ShellCheck
+
+on:
+  push:
+    branches: ["*"]
+    paths:
+      - "scripts/**"
+      - "**.sh"
+  pull_request:
+    branches: ["*"]
+    paths:
+      - "scripts/**"
+      - "**.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: "./scripts"
+          severity: warning

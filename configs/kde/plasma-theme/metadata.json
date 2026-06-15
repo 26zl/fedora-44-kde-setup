@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Authors": [{"Name": "lenti"}],
+        "Description": "Darth Vader - transparent panel",
+        "Id": "darth-vader",
+        "Name": "Darth Vader",
+        "Version": "1.0"
+    },
+    "X-Plasma-API": "5.0"
+}

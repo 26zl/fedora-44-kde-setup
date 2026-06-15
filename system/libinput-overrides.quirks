@@ -1,0 +1,3 @@
+[Mouse Debouncing]
+MatchUdevType=mouse
+ModelBouncingKeys=1

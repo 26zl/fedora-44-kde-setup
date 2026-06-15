@@ -1,0 +1,1 @@
+KERNEL=="ntsync", SUBSYSTEM=="misc", TAG+="uaccess"

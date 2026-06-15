@@ -1,0 +1,56 @@
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+.localized
+Icon$'\r'
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# ── Windows ──────────────────────────────────────────────────────────────────
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+# ── Linux ────────────────────────────────────────────────────────────────────
+*~
+.Trash-*/
+.nfs*
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Temp / logs ──────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.pid
+
+# ── Build artifacts ──────────────────────────────────────────────────────────
+*.o
+*.obj
+*.elf
+
+# ── Claude Code ──────────────────────────────────────────────────────────────
+CLAUDE.md
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+vendor/

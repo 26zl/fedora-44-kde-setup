@@ -1,0 +1,46 @@
+# zoxide — smart cd
+eval "$(zoxide init bash)"
+
+# lazygit
+alias lg='lazygit'
+
+# eza — colored ls with icons
+alias ls='eza --icons --group-directories-first --color=always'
+alias ll='eza --icons --group-directories-first --color=always -lh --git'
+alias la='eza --icons --group-directories-first --color=always -lha --git'
+alias tree='eza --icons --tree --color=always'
+
+# bat — syntax-highlighted cat
+alias cat='bat --pager=never'
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+
+# grep with color
+alias grep='grep --color=auto'
+alias diff='diff --color=auto'
+
+# delta — syntax-highlighted git diffs
+export GIT_PAGER='delta'
+
+# yazi — cd into directory on exit
+ya() {
+  local tmp cwd
+  tmp="$(mktemp -t "yazi-cwd.XXXXXX")"
+  yazi "$@" --cwd-file="$tmp"
+  if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+    builtin cd -- "$cwd"
+  fi
+  rm -f -- "$tmp"
+}
+
+# mise — runtime version manager
+eval "$(~/.local/bin/mise activate bash 2>/dev/null)" || true
+
+# Gamescope — 2560x1440 @ 165Hz, RT scheduling, async flips, MangoApp overlay
+alias gcs2='gamescope -W 2560 -H 1440 -r 165 --rt --immediate-flips --mangoapp -e --'
+
+# scripts
+alias rice="$HOME/scripts/rice-start.sh"
+alias sysinfo="$HOME/scripts/sysinfo.sh"
+
+# Starship prompt
+eval "$(starship init bash)"
