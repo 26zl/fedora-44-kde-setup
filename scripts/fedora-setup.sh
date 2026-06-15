@@ -234,10 +234,11 @@ ok "libinput eager debouncing disabled (Hall Effect sensor — no debounce neede
 
 section "Suspend / resume fixes"
 sudo cp system/99-disable-wakeup.rules /etc/udev/rules.d/99-disable-wakeup.rules
+sudo cp system/99-usb-autosuspend.rules /etc/udev/rules.d/99-usb-autosuspend.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo cp system/kwin-display-fix.sh /usr/lib/systemd/system-sleep/kwin-display-fix.sh
 sudo chmod +x /usr/lib/systemd/system-sleep/kwin-display-fix.sh
-ok "USB wakeup disabled for LAMZU dongle, KWin display resume hook installed"
+ok "USB wakeup disabled, USB autosuspend enabled for xHCI-blocking devices, KWin display resume hook installed"
 
 section "plasmalogin restart on failure (NVIDIA logout fix)"
 sudo mkdir -p /etc/systemd/system/plasmalogin.service.d

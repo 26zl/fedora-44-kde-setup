@@ -45,8 +45,9 @@ ok "tuned: PPD performance mapped to latency-performance"
 section "udev rules"
 sudo cp system/99-lamzu.rules /etc/udev/rules.d/99-lamzu.rules
 sudo cp system/99-disable-wakeup.rules /etc/udev/rules.d/99-disable-wakeup.rules
+sudo cp system/99-usb-autosuspend.rules /etc/udev/rules.d/99-usb-autosuspend.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
-ok "99-lamzu.rules, 99-disable-wakeup.rules"
+ok "99-lamzu.rules, 99-disable-wakeup.rules, 99-usb-autosuspend.rules"
 
 section "Suspend / resume"
 sudo cp system/kwin-display-fix.sh /usr/lib/systemd/system-sleep/kwin-display-fix.sh
