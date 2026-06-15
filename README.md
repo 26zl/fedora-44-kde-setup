@@ -26,8 +26,6 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 
 ```text
 ├── configs/
-│   ├── autostart/
-│   │   └── conky.desktop       # Conky autostart entry
 │   ├── conky/conky.conf        # Desktop system stats widget
 │   ├── fish/
 │   │   ├── config.fish         # Fish shell config (aliases, zoxide, starship)
@@ -43,6 +41,8 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── wireplumber/
 │   │   └── wireplumber.conf.d/
 │   │       └── 50-audio.conf   # Disable unused ALSA nodes, NVIDIA HDMI pro-audio
+│   ├── systemd/
+│   │   └── conky.service       # ~/.config/systemd/user/ — Conky autostart service
 │   └── bashrc                  # ~/.bashrc additions (ble.sh, zoxide, aliases)
 ├── system/
 │   ├── nvidia-wayland.conf     # /etc/environment.d/ — NVIDIA Wayland env vars
@@ -481,14 +481,11 @@ Right-click panel → Enter Edit Mode:
 
 ```bash
 sudo dnf install -y conky
-mkdir -p ~/.config/conky
+mkdir -p ~/.config/conky ~/.config/systemd/user
 cp configs/conky/conky.conf ~/.config/conky/conky.conf
-
-mkdir -p ~/.config/autostart
-cp configs/autostart/conky.desktop ~/.config/autostart/conky.desktop
-
-# Start now
-conky --daemonize --pause=3 --config=~/.config/conky/conky.conf
+cp configs/systemd/conky.service ~/.config/systemd/user/conky.service
+systemctl --user daemon-reload
+systemctl --user enable --now conky.service
 ```
 
 ---
