@@ -1,0 +1,20 @@
+[Unit]
+Description=USB autosuspend for xHCI-blocking devices
+# drivers override power/control after udev add/bind — write directly after boot
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '\
+  for dev in /sys/bus/usb/devices/*/; do \
+    vid=$(cat "$dev/idVendor" 2>/dev/null); \
+    pid=$(cat "$dev/idProduct" 2>/dev/null); \
+    case "$vid:$pid" in \
+      0951:176b|373e:001e|03f0:098d|048d:5711|046d:c548) \
+        echo auto > "$dev/power/control" 2>/dev/null;; \
+    esac; \
+  done'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
