@@ -1,4 +1,4 @@
 # LAMZU Maya X 8K Dongle — prevent from waking system from sleep
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="373e", ATTRS{idProduct}=="001e", ATTR{power/wakeup}="disabled"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="373e", ATTRS{idProduct}=="001e", ATTR{power/wakeup}="disabled"
 # USB Receiver — prevent wakeup (all LAMZU vendor devices)
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="373e", ATTR{power/wakeup}="disabled"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="373e", ATTR{power/wakeup}="disabled"
