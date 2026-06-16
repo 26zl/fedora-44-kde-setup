@@ -3,16 +3,16 @@
 # to s2idle, which amdgpu rejects, causing 10+ second resume times.
 
 # Kingston XS2000 portable SSD (UAS — keeps controller active without autosuspend)
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="0951", ATTRS{idProduct}=="176b", ATTR{power/control}="auto"
+ACTION=="bind", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="0951", ATTRS{idProduct}=="176b", ATTR{power/control}="auto"
 
 # LAMZU Maya X 8K Dongle
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="373e", ATTRS{idProduct}=="001e", ATTR{power/control}="auto"
+ACTION=="bind", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="373e", ATTRS{idProduct}=="001e", ATTR{power/control}="auto"
 
 # HyperX Cloud Alpha Wireless
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="098d", ATTR{power/control}="auto"
+ACTION=="bind", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="098d", ATTR{power/control}="auto"
 
 # GIGABYTE USB device
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="5711", ATTR{power/control}="auto"
+ACTION=="bind", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="5711", ATTR{power/control}="auto"
 
 # Logitech USB Receiver
-ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c548", ATTR{power/control}="auto"
+ACTION=="bind", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c548", ATTR{power/control}="auto"
