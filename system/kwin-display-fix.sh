@@ -45,7 +45,7 @@ if [ "$1" = "post" ]; then
     WAYLAND="wayland-0"
 
     su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} WAYLAND_DISPLAY=${WAYLAND} /usr/bin/kscreen-doctor \
-        output.1.enable output.2.enable" "$ACTIVE_USER" 2>/dev/null || true
+        output.DP-1.enable output.DP-3.enable" "$ACTIVE_USER" 2>/dev/null || true
 
     sleep 1
     su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} dbus-send \
