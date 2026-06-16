@@ -42,8 +42,9 @@ if [ "$1" = "post" ]; then
     ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '{print $3}' | head -1)
     USER_ID=$(id -u "$ACTIVE_USER" 2>/dev/null || echo 1000)
     DBUS="unix:path=/run/user/${USER_ID}/bus"
+    WAYLAND="wayland-0"
 
-    su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} /usr/bin/kscreen-doctor \
+    su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} WAYLAND_DISPLAY=${WAYLAND} /usr/bin/kscreen-doctor \
         output.1.enable output.2.enable" "$ACTIVE_USER" 2>/dev/null || true
 
     sleep 1
