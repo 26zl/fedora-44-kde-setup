@@ -539,6 +539,8 @@ sudo dnf install -y gamemode mangohud
 
 Steam launch options: `gamemoderun mangohud %command%`
 
+This is the universal baseline — use it on every game, native or Proton. The flags in the table below stack in front of it only for Proton games that need them.
+
 ### ProtonUp-Qt (Proton versions)
 
 Installed via Flatpak (`net.davidotek.pupgui2`). Use to install GE-Proton for better game compatibility.
@@ -565,6 +567,8 @@ Per-game launch options in Steam (right-click game → Properties → Launch Opt
 | Ray tracing (VKD3D) | `VKD3D_CONFIG=dxr %command%` |
 | GPU not detected in game | add `PROTON_HIDE_NVIDIA_GPU=0` |
 | All combined | `PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 PROTON_HIDE_NVIDIA_GPU=0 VKD3D_CONFIG=dxr %command%` |
+
+Append `gamemoderun mangohud` after the env vars to keep GameMode and the overlay, e.g. `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 gamemoderun mangohud %command%`.
 
 `PROTON_ENABLE_WAYLAND=1` requires GE-Proton — standard Steam Proton ignores it.
 
