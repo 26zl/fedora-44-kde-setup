@@ -52,7 +52,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── zram-generator.conf     # /etc/systemd/ — ZRAM 8GB
 │   ├── k10temp.conf            # /etc/modules-load.d/ — CPU temp sensor
 │   ├── scx_loader.toml         # /etc/scx_loader/ — scx_lavd Gaming mode
-│   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — Quad9, DNSSEC, DoT
+│   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — DNSSEC, opportunistic DoT
 │   ├── tuned-ppd.conf          # /etc/tuned/ppd.conf — PPD → tuned profile map
 │   ├── macros.image-language-conf # /etc/rpm/ — limit langpacks to en_US
 │   ├── ntsync.conf             # /etc/modules-load.d/ — load ntsync at boot
