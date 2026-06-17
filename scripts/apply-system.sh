@@ -20,13 +20,14 @@ ok "nvidia-performance.conf, nvidia-wayland.conf, suspend/resume services enable
 section "sysctl / DNF / ZRAM"
 sudo cp system/99-tweaks.conf /etc/sysctl.d/99-tweaks.conf
 sudo sysctl --system -q
+sudo cp system/99-disable-modules.conf /etc/modprobe.d/99-disable-modules.conf
 sudo cp system/dnf.conf /etc/dnf/dnf.conf
 sudo cp system/macros.image-language-conf /etc/rpm/macros.image-language-conf
 sudo cp system/zram-generator.conf /etc/systemd/zram-generator.conf
 sudo cp system/k10temp.conf /etc/modules-load.d/k10temp.conf
 sudo cp system/hugepages.conf /etc/tmpfiles.d/hugepages.conf
 sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
-ok "99-tweaks.conf, dnf.conf, macros.image-language-conf, zram-generator.conf, k10temp.conf, hugepages.conf"
+ok "99-tweaks.conf, 99-disable-modules.conf, dnf.conf, zram-generator.conf, hugepages.conf"
 
 section "Kernel parameters"
 sudo grubby --update-kernel=ALL --remove-args="nowatchdog audit=0 skew_tick=1 workqueue.power_efficient=false" 2>/dev/null || true
