@@ -35,7 +35,12 @@ if [ "$1" = "post" ]; then
     done
     for vid_pid in $DEAUTH_DEVS; do
         dev=$(find_dev "$vid_pid")
-        [ -n "$dev" ] && echo 1 > "${dev}authorized" 2>/dev/null
+        if [ -n "$dev" ]; then
+            # cycle 0→1 to power-reset dongle RF state and wake mouse from deep sleep
+            echo 0 > "${dev}authorized" 2>/dev/null
+            sleep 0.3
+            echo 1 > "${dev}authorized" 2>/dev/null
+        fi
     done
 
     sleep 4
