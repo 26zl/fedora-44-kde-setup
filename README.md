@@ -573,6 +573,14 @@ Per-game launch options in Steam (right-click game → Properties → Launch Opt
 
 Append `gamemoderun mangohud` after the env vars to keep GameMode and the overlay, e.g. `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 gamemoderun mangohud %command%`.
 
+On Proton 9+/GE-Proton 10.x, NVAPI is on by default, so `PROTON_ENABLE_NVAPI` is mostly a no-op. To force DLSS 4 DLLs on RTX 50-series, use GE-Proton with `PROTON_DLSS_UPGRADE=1 %command%`.
+
+### Display & competitive
+
+- **VRR**: System Settings → Display & Monitor → Adaptive Sync → `Automatic`. Driver 555.58+ gives Wayland explicit sync (no NVIDIA flicker). Good for desktop and single-player; leave it off for competitive CS2 (adds ~1-3 ms once FPS is well above refresh).
+- **HDR**: use KWin's native HDR per-display. Avoid gamescope HDR on Plasma 6.5 with NVIDIA — known washed/grey regression. Keep HDR off for CS2 (it's SDR).
+- **CS2 NVIDIA Reflex**: leave **Disabled** in Video settings — on Linux/NVIDIA it often hurts frametime consistency. Cap frames with `+fps_max 400` instead.
+
 `PROTON_ENABLE_WAYLAND=1` requires GE-Proton — standard Steam Proton ignores it.
 
 ---
