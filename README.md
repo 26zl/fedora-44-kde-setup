@@ -492,12 +492,15 @@ systemctl --user enable --now conky.service
 
 ## Gaming Setup
 
+### Steam
+
+Installed natively from RPM Fusion (`sudo dnf install steam`), not Flatpak. The Flatpak sandbox ships its own NVIDIA driver layer, which broke Vulkan device init (`RenderDeviceMgr001`) and forced shader reprocessing on this multi-GPU box. Native uses the host driver directly. Launch options: `gamemoderun mangohud %command%` — host gamemode and MangoHud work without sandbox extensions. On a multi-GPU system, if a game picks the wrong GPU, prefix `VK_LOADER_DRIVERS_SELECT=nvidia_icd.json`.
+
 ### Flatpak
 
 ```bash
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak install -y flathub \
-  com.valvesoftware.Steam \
   net.davidotek.pupgui2 \
   com.heroicgameslauncher.hgl \
   net.lutris.Lutris \

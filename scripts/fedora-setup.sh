@@ -81,6 +81,7 @@ ok "RTC set to UTC (Windows must use UTC too)"
 
 section "System tools"
 sudo dnf install -y \
+    steam \
     gamemode \
     mangohud \
     htop \
@@ -152,7 +153,6 @@ ok "JetBrainsMono Nerd Font installed"
 section "Flatpak (gaming)"
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak install -y flathub \
-    com.valvesoftware.Steam \
     net.davidotek.pupgui2 \
     com.heroicgameslauncher.hgl \
     net.lutris.Lutris \
@@ -160,7 +160,7 @@ flatpak install -y flathub \
     org.prismlauncher.PrismLauncher \
     io.github.benjamimgois.goverlay \
     com.github.wwmm.easyeffects
-ok "Steam, ProtonUp-Qt, Heroic, Lutris, Bottles, Prism, GOverlay, EasyEffects installed"
+ok "ProtonUp-Qt, Heroic, Lutris, Bottles, Prism, GOverlay, EasyEffects installed"
 
 section "NTSync (Wine/Proton CPU optimization)"
 sudo cp system/ntsync.conf /etc/modules-load.d/ntsync.conf
