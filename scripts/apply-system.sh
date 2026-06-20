@@ -46,8 +46,9 @@ ok "tuned: PPD performance mapped to latency-performance"
 section "udev rules"
 sudo cp system/99-lamzu.rules /etc/udev/rules.d/99-lamzu.rules
 sudo cp system/99-disable-wakeup.rules /etc/udev/rules.d/99-disable-wakeup.rules
+sudo cp system/99-dualsense.rules /etc/udev/rules.d/99-dualsense.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
-ok "99-lamzu.rules, 99-disable-wakeup.rules"
+ok "99-lamzu.rules, 99-disable-wakeup.rules, 99-dualsense.rules"
 
 section "Suspend / resume"
 sudo cp system/kwin-display-fix.sh /usr/lib/systemd/system-sleep/kwin-display-fix.sh
@@ -86,6 +87,15 @@ sudo cp system/99-ntsync.rules /etc/udev/rules.d/99-ntsync.rules
 sudo udevadm control --reload-rules
 sudo modprobe ntsync 2>/dev/null || true
 ok "99-ntsync.rules, ntsync.conf"
+
+section "Disk quota fix (tmpfs)"
+sudo mkdir -p /etc/systemd/system/tmp.mount.d
+sudo cp system/tmp-mount-override.conf /etc/systemd/system/tmp.mount.d/override.conf
+if ! grep -qE '^[[:space:]]*tmpfs[[:space:]]+/dev/shm' /etc/fstab; then
+    echo 'tmpfs  /dev/shm  tmpfs  rw,nosuid,nodev,inode64  0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+sudo systemctl daemon-reload
+ok "Dropped systemd auto usrquota on /tmp + /dev/shm (takes effect on reboot)"
 
 section "Done"
 ok "All system files deployed. Reboot recommended if modprobe/zram configs changed."

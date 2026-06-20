@@ -27,6 +27,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 ```text
 ├── configs/
 │   ├── conky/conky.conf        # Desktop system stats widget
+│   ├── es-de/es_systems.xml    # ~/ES-DE/custom_systems/ — standalone emulator defaults
 │   ├── fish/
 │   │   ├── config.fish         # Fish shell config (aliases, zoxide, starship)
 │   │   └── functions/ya.fish   # Yazi cd-on-exit wrapper
@@ -50,6 +51,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── 99-tweaks.conf          # /etc/sysctl.d/ — performance tweaks
 │   ├── dnf.conf                # /etc/dnf/ — DNF settings
 │   ├── zram-generator.conf     # /etc/systemd/ — ZRAM 8GB
+│   ├── tmp-mount-override.conf # /etc/systemd/system/tmp.mount.d/ — drop tmpfs usrquota
 │   ├── k10temp.conf            # /etc/modules-load.d/ — CPU temp sensor
 │   ├── scx_loader.toml         # /etc/scx_loader/ — scx_lavd Gaming mode
 │   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — DNSSEC, opportunistic DoT
@@ -58,6 +60,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── ntsync.conf             # /etc/modules-load.d/ — load ntsync at boot
 │   ├── 99-ntsync.rules         # /etc/udev/rules.d/ — ntsync user access
 │   ├── 99-lamzu.rules          # /etc/udev/rules.d/ — LAMZU Maya X udev rules
+│   ├── 99-dualsense.rules      # /etc/udev/rules.d/ — DualSense touchpad/motion noise fix
 │   ├── 99-disable-wakeup.rules # /etc/udev/rules.d/ — disable USB wakeup
 │   ├── libinput-overrides.quirks # /etc/libinput/ — disable mouse debouncing
 │   ├── hugepages.conf          # /etc/tmpfiles.d/ — transparent hugepages
@@ -67,6 +70,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 ├── scripts/
 │   ├── fedora-setup.sh         # Full automated setup from scratch
 │   ├── apply-system.sh         # Deploy system/ files to their system paths
+│   ├── emulation-setup.sh      # ES-DE + standalone emulators (PS1/2/3, Wii)
 │   ├── rice-start.sh           # Restart Conky
 │   └── sysinfo.sh              # System health overview in terminal
 └── wallpaper/
@@ -257,15 +261,25 @@ sudo firewall-cmd --reload
 firewall-cmd --list-services  # Verify
 ```
 
-### 12. Dual-Boot Clock Fix (Windows + Linux)
+### 12. Dual-Boot (Clock + Sleep/Hibernate)
 
-Make Windows read the hardware clock as UTC (prevents time drift on dual-boot):
+**Clock** — Windows and Linux must read the hardware clock the same way, or the time is off by your UTC offset after switching OS. Use UTC on both sides:
 
-Open PowerShell as Administrator on Windows:
+- **Linux** → UTC: `fedora-setup.sh` runs `sudo timedatectl set-local-rtc 0`. Verify with `timedatectl` — it must show `RTC in local TZ: no`. If it shows `yes`, the two clocks fight; re-run `sudo timedatectl set-local-rtc 0`. *(This is the usual reason the time is still wrong even after the Windows reg edit.)*
+- **Windows** → UTC, PowerShell as Administrator:
+  ```powershell
+  reg add "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f
+  ```
+  Then Settings → Time & language → **Set time automatically** on.
 
-```powershell
-reg add "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f
-```
+**Sleep / hibernate** — after a long sleep, Windows (Modern Standby) auto-hibernates and powers off. The next wake is a full boot, so GRUB appears (Fedora is first in the UEFI boot order) and after its timeout boots Fedora — stranding the hibernated Windows session.
+
+- **Windows** — disable hibernate (a desktop never needs it; sleep keeps RAM powered), PowerShell as Administrator:
+  ```powershell
+  powercfg /h off
+  ```
+  This also disables Fast Startup, which must be off when sharing an NTFS disk with Linux.
+- **Linux** — `fedora-setup.sh` sets `GRUB_SAVEDEFAULT=true` (with `GRUB_DEFAULT=saved`) and regenerates `grub.cfg`, so GRUB remembers the last-booted OS. If GRUB does appear it re-selects Windows and chainloads the Windows Boot Manager, which resumes the hibernated session.
 
 ### 13. Backup — Snapper (BTRFS Snapshots)
 
@@ -320,6 +334,23 @@ libinput adds eager debouncing to all mice by default. The LAMZU Maya X 8K uses 
 sudo mkdir -p /etc/libinput
 sudo cp system/libinput-overrides.quirks /etc/libinput/local-overrides.quirks
 ```
+
+---
+
+### 16. tmpfs Quota Fix (/tmp + /dev/shm)
+
+systemd 256+ mounts `/tmp` and `/dev/shm` with an automatic per-user quota (~12 GB on 30 GB RAM). Heavy temp use (Chrome, large extractions) hits it and fails with **"Disk quota exceeded"** long before the tmpfs is full. Pointless on a single-user box.
+
+```bash
+# /tmp — drop-in removes usrquota (keeps nosuid/nodev/size)
+sudo mkdir -p /etc/systemd/system/tmp.mount.d
+sudo cp system/tmp-mount-override.conf /etc/systemd/system/tmp.mount.d/override.conf
+
+# /dev/shm — no mount unit to override, so use fstab
+echo 'tmpfs  /dev/shm  tmpfs  rw,nosuid,nodev,inode64  0 0' | sudo tee -a /etc/fstab
+```
+
+Takes effect on reboot.
 
 ---
 
@@ -585,11 +616,58 @@ On Proton 9+/GE-Proton 10.x, NVAPI is on by default, so `PROTON_ENABLE_NVAPI` is
 
 ---
 
+## Emulation
+
+Retro frontend (ES-DE) + standalone emulators. Install with:
+
+```bash
+bash scripts/emulation-setup.sh
+```
+
+| System | Emulator | Source |
+|---|---|---|
+| PS1 | DuckStation | Flatpak |
+| PS2 | PCSX2 | Flatpak |
+| PS3 | RPCS3 | Flatpak |
+| SNES / N64 | RetroArch (snes9x / Mupen64Plus-Next cores) | Flatpak |
+| Wii | Dolphin | Flatpak |
+| Frontend | ES-DE (EmulationStation Desktop Edition) | Terra repo |
+
+### Default emulators (standalone, not libretro)
+
+ES-DE defaults each system to a libretro core, but only the standalone emulators are installed — launching a game otherwise errors with `couldn't find emulator core file <x>_libretro.so`. `configs/es-de/es_systems.xml` (deployed to `~/ES-DE/custom_systems/`) overrides the default to the standalone emulator per system (psx → DuckStation, ps2 → PCSX2, ps3 → RPCS3, wii → Dolphin).
+
+### BIOS / firmware / ROMs (user-provided)
+
+Not shipped — provide your own:
+
+- **ROMs** → `~/Emulation/roms/<system>/` (`psx`, `ps2`, `ps3`, `snes`, `n64`, `wii`). Set ES-DE's ROM directory here.
+- **PS1/PS2 BIOS** → the emulator's `bios/` folder under `~/.var/app/<id>/`.
+- **PS3 firmware** → RPCS3 → File → Install Firmware (`PS3UPDAT.PUP` from Sony).
+- **SNES/N64 cores** → RetroArch → Online Updater → Update Installed Cores.
+
+> ROMs on a separate disk: move `~/Emulation/roms` to the disk and symlink it back, then grant the emulator Flatpaks access to that path (`flatpak override --user --filesystem=<path> <id>`).
+
+> DuckStation's Flathub build is end-of-life (still works). For the maintained version use the official AppImage in `~/Applications/` — ES-DE auto-detects it.
+
+### Controller (DualSense)
+
+- `system/99-dualsense.rules` stops the touchpad acting as a system mouse and the motion sensors registering as a second joystick (inverted axes / dead buttons).
+- KWin's `gamecontroller` plugin emulates keyboard/mouse from a pad for desktop navigation, which hijacks emulators (D-pad→arrows, Cross→Enter, Circle→ESC). Disabled via `kwinrc` → `[Plugins] gamecontrollerEnabled=false` (needs re-login).
+- Each emulator has its **own** mapping: PCSX2/DuckStation → Settings → Controllers → Automatic Mapping; Dolphin → Wii Remote 1 → Emulated Wii Remote → Configure.
+- Camera feels inverted vs other games? That's the game's own *Invert Y-Axis* option, not the emulator.
+
+---
+
 ## Scripts
 
 ### `scripts/fedora-setup.sh`
 
 Full automated setup from scratch. Run once on a fresh Fedora 44 KDE install. Handles everything except Secure Boot enrollment.
+
+### `scripts/emulation-setup.sh`
+
+Retro emulation setup — installs ES-DE (Terra repo) and the standalone emulators (PS1/PS2/PS3, Wii), grants Flatpak ROM access, and deploys the standalone-emulator defaults. BIOS/firmware/ROMs are user-provided (see the printed manual steps).
 
 ### `scripts/sysinfo.sh` — alias: `sysinfo`
 

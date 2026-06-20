@@ -54,6 +54,16 @@ sudo dnf install -y zram-generator
 sudo cp system/zram-generator.conf /etc/systemd/zram-generator.conf
 ok "ZRAM 8GB configured"
 
+section "Disk quota fix (tmpfs)"
+# systemd 256+ mounts /tmp and /dev/shm with an automatic ~12G per-user quota,
+# so writes fail with "Disk quota exceeded" before the tmpfs is full.
+sudo mkdir -p /etc/systemd/system/tmp.mount.d
+sudo cp system/tmp-mount-override.conf /etc/systemd/system/tmp.mount.d/override.conf
+if ! grep -qE '^[[:space:]]*tmpfs[[:space:]]+/dev/shm' /etc/fstab; then
+    echo 'tmpfs  /dev/shm  tmpfs  rw,nosuid,nodev,inode64  0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+ok "Dropped systemd auto usrquota on /tmp + /dev/shm (takes effect on reboot)"
+
 section "CPU temperature sensor"
 sudo dnf install -y lm_sensors
 sudo cp system/k10temp.conf /etc/modules-load.d/k10temp.conf
@@ -75,9 +85,15 @@ sudo cp system/resolved-hardening.conf /etc/systemd/resolved.conf.d/hardening.co
 sudo systemctl restart systemd-resolved
 ok "Quad9 DNS, DNSSEC=allow-downgrade, DNSOverTLS=opportunistic"
 
-section "Dual-boot RTC fix"
+section "Dual-boot (RTC + GRUB default)"
 sudo timedatectl set-local-rtc 0
-ok "RTC set to UTC (Windows must use UTC too)"
+# GRUB remembers the last-booted OS — after a Windows hibernate the next full
+# boot lands in GRUB; this makes it re-pick Windows instead of booting Fedora
+if ! grep -q '^GRUB_SAVEDEFAULT=' /etc/default/grub; then
+    echo 'GRUB_SAVEDEFAULT=true' | sudo tee -a /etc/default/grub >/dev/null
+    sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+fi
+ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
 
 section "System tools"
 sudo dnf install -y \
@@ -193,7 +209,10 @@ section "KWin latency"
 kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy ExtremelyLow
 kwriteconfig6 --file kwinrc --group Compositing --key MaxFPS 165
 kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true
-ok "KWin: ExtremelyLow latency, 165Hz max, blur enabled"
+# disable KWin's gamepad->keyboard desktop navigation — it hijacks controllers
+# (D-pad->arrows, Cross->Enter, Circle->ESC) and fights emulators/games
+kwriteconfig6 --file kwinrc --group Plugins --key gamecontrollerEnabled false
+ok "KWin: ExtremelyLow latency, 165Hz max, blur enabled, gamepad-nav disabled"
 
 section "Lock screen wallpaper"
 kwriteconfig6 --file kscreenlockerrc \
@@ -221,11 +240,12 @@ cp configs/wireplumber/wireplumber.conf.d/50-audio.conf \
 systemctl --user restart wireplumber
 ok "WirePlumber: unused audio devices disabled, NVIDIA HDMI pro-audio configured"
 
-section "LAMZU mouse udev rules"
+section "Peripheral udev rules (mouse + controller)"
 sudo cp system/99-lamzu.rules /etc/udev/rules.d/99-lamzu.rules
+sudo cp system/99-dualsense.rules /etc/udev/rules.d/99-dualsense.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
-ok "LAMZU Maya X 8K: udev rules installed — configure via lamzu.net in Chrome"
+ok "LAMZU Maya X 8K + DualSense rules installed (configure LAMZU via lamzu.net in Chrome)"
 
 section "libinput debounce"
 sudo mkdir -p /etc/libinput
@@ -332,4 +352,5 @@ echo "  5. KDE Settings → Fonts → Fixed width → JetBrainsMono Nerd Font"
 echo "  6. KDE Settings → Wallpaper → ~/Pictures/wallpaper.jpg"
 echo "  7. Start Conky: conky --daemonize --pause=3 --config=~/.config/conky/conky.conf"
 echo ""
+info "For retro emulation (ES-DE + PS1/PS2/PS3/Wii): bash scripts/emulation-setup.sh"
 ok "Reboot recommended."

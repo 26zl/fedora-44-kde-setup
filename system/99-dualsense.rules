@@ -1,0 +1,4 @@
+# DualSense: stop touchpad from driving the system cursor
+SUBSYSTEM=="input", ATTRS{name}=="*DualSense*Touchpad", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+# DualSense: stop motion sensors from registering as a second joystick
+SUBSYSTEM=="input", ATTRS{name}=="*DualSense*Motion Sensors", ENV{ID_INPUT_JOYSTICK}="0", ENV{ID_INPUT_ACCELEROMETER}="0"
