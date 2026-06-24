@@ -45,6 +45,10 @@ sudo cp system/hugepages.conf /etc/tmpfiles.d/hugepages.conf
 sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ok "sysctl tweaks applied, transparent hugepages configured"
 
+section "Disable unused kernel modules"
+sudo cp system/99-disable-modules.conf /etc/modprobe.d/99-disable-modules.conf
+ok "Blacklisted dccp/sctp/rds/tipc/firewire (attack-surface reduction)"
+
 section "Kernel parameters"
 sudo grubby --update-kernel=ALL --args="nowatchdog audit=0 skew_tick=1 workqueue.power_efficient=false"
 ok "Kernel parameters added (nowatchdog, audit=0, skew_tick=1, workqueue.power_efficient=false) — takes effect on next boot"
@@ -88,9 +92,22 @@ ok "Quad9 DNS, DNSSEC=allow-downgrade, DNSOverTLS=opportunistic"
 section "Dual-boot (RTC + GRUB default)"
 sudo timedatectl set-local-rtc 0
 # GRUB remembers the last-booted OS — after a Windows hibernate the next full
-# boot lands in GRUB; this makes it re-pick Windows instead of booting Fedora
-if ! grep -q '^GRUB_SAVEDEFAULT=' /etc/default/grub; then
+# boot lands in GRUB; this makes it re-pick Windows instead of booting Fedora.
+# GRUB_SAVEDEFAULT only takes effect together with GRUB_DEFAULT=saved, so ensure both.
+grub_changed=0
+if ! grep -q '^GRUB_DEFAULT=saved' /etc/default/grub; then
+    if grep -q '^GRUB_DEFAULT=' /etc/default/grub; then
+        sudo sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
+    else
+        echo 'GRUB_DEFAULT=saved' | sudo tee -a /etc/default/grub >/dev/null
+    fi
+    grub_changed=1
+fi
+if ! grep -q '^GRUB_SAVEDEFAULT=true' /etc/default/grub; then
     echo 'GRUB_SAVEDEFAULT=true' | sudo tee -a /etc/default/grub >/dev/null
+    grub_changed=1
+fi
+if [[ $grub_changed -eq 1 ]]; then
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 fi
 ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
@@ -141,11 +158,15 @@ else
 fi
 
 # Yazi (prebuilt binary)
-YAZI_VER=$(curl -s https://api.github.com/repos/sxyazi/yazi/releases/latest | grep tag_name | cut -d'"' -f4)
-curl -sL "https://github.com/sxyazi/yazi/releases/download/${YAZI_VER}/yazi-x86_64-unknown-linux-gnu.zip" -o /tmp/yazi.zip
-unzip -q /tmp/yazi.zip -d /tmp/yazi-bin
-sudo install -m755 /tmp/yazi-bin/yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/yazi
-ok "Yazi installed"
+if ! command -v yazi &>/dev/null; then
+    YAZI_VER=$(curl -s https://api.github.com/repos/sxyazi/yazi/releases/latest | grep tag_name | cut -d'"' -f4)
+    curl -sL "https://github.com/sxyazi/yazi/releases/download/${YAZI_VER}/yazi-x86_64-unknown-linux-gnu.zip" -o /tmp/yazi.zip
+    unzip -q /tmp/yazi.zip -d /tmp/yazi-bin
+    sudo install -m755 /tmp/yazi-bin/yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/yazi
+    ok "Yazi installed"
+else
+    ok "Yazi already installed"
+fi
 
 # ble.sh — bash syntax highlighting
 if [[ ! -f ~/.local/share/blesh/ble.sh ]]; then
@@ -182,7 +203,7 @@ section "NTSync (Wine/Proton CPU optimization)"
 sudo cp system/ntsync.conf /etc/modules-load.d/ntsync.conf
 sudo cp system/99-ntsync.rules /etc/udev/rules.d/99-ntsync.rules
 sudo udevadm control --reload-rules
-sudo modprobe ntsync
+sudo modprobe ntsync 2>/dev/null || warn "ntsync module unavailable (needs kernel 6.14+) — modules-load.d will load it at next boot"
 ok "NTSync enabled — Proton uses it automatically"
 
 section "Gamescope"
@@ -228,8 +249,12 @@ fi
 if ! snapper list-configs | grep -q "^home"; then
     sudo snapper -c home create-config /home
 fi
-sudo snapper -c root create --description "Initial clean setup" --cleanup-algorithm number
-sudo snapper -c home create --description "Initial home snapshot" --cleanup-algorithm number
+if ! sudo snapper -c root list | grep -q "Initial clean setup"; then
+    sudo snapper -c root create --description "Initial clean setup" --cleanup-algorithm number
+fi
+if ! sudo snapper -c home list | grep -q "Initial home snapshot"; then
+    sudo snapper -c home create --description "Initial home snapshot" --cleanup-algorithm number
+fi
 sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
 ok "Snapper installed — root + home snapshots taken, timeline enabled"
 
@@ -288,7 +313,7 @@ cp configs/starship/starship.toml ~/.config/starship.toml
 cp configs/conky/conky.conf ~/.config/conky/conky.conf
 cp configs/kde/DarthVader.colors ~/.local/share/color-schemes/DarthVader.colors
 cp configs/kde/kvantum/kvantum.kvconfig ~/.config/Kvantum/kvantum.kvconfig
-cp -r configs/kde/plasma-theme/darth-vader ~/.local/share/plasma/desktoptheme/
+cp -rT configs/kde/plasma-theme ~/.local/share/plasma/desktoptheme/darth-vader
 cp configs/fish/config.fish ~/.config/fish/config.fish
 cp configs/fish/functions/ya.fish ~/.config/fish/functions/ya.fish
 cp wallpaper/wallpaper.jpg ~/Pictures/wallpaper.jpg
@@ -342,10 +367,12 @@ systemctl --user enable --now conky.service
 ok "Conky systemd user service installed and enabled"
 
 section "Setup complete"
-warn "Manual steps required after reboot:"
-echo "  1. Enroll Secure Boot MOK key: sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
-echo "     → Select 'Enroll MOK' at the blue MOK Manager screen on reboot"
-echo "  2. Wait ~5 min for NVIDIA kernel module to build, then: sudo akmods --force && sudo dracut --force"
+warn "Before rebooting (Secure Boot — run this now, not after the reboot):"
+echo "  1. Queue the NVIDIA MOK key: sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
+echo "     → then reboot and pick 'Enroll MOK' at the blue MOK Manager screen"
+echo ""
+warn "After reboot:"
+echo "  2. Wait ~5 min for the NVIDIA kernel module to build, then: sudo akmods --force && sudo dracut --force"
 echo "  3. KDE Settings → Colors → DarthVader → Apply"
 echo "  4. KDE Settings → Application Style → kvantum → Apply"
 echo "  5. KDE Settings → Fonts → Fixed width → JetBrainsMono Nerd Font"

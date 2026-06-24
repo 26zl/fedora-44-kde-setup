@@ -35,8 +35,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   │   ├── DarthVader.colors   # KDE color scheme (teal + red on black)
 │   │   ├── kvantum/
 │   │   │   └── kvantum.kvconfig # Kvantum theme config (LayanDark)
-│   │   └── plasma-theme/
-│   │       └── darth-vader/    # Custom Plasma desktop theme
+│   │   └── plasma-theme/       # Custom Plasma desktop theme — deployed to ~/.local/share/plasma/desktoptheme/darth-vader/
 │   ├── kitty/kitty.conf        # Terminal config — fish shell, Darth Vader palette
 │   ├── starship/starship.toml  # Shell prompt
 │   ├── wireplumber/
@@ -68,7 +67,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── plasmalogin.conf        # /etc/plasmalogin.conf — login screen wallpaper
 │   └── plasmalogin-restart.conf # systemd drop-in — auto-restart plasmalogin on crash
 ├── scripts/
-│   ├── fedora-setup.sh         # Full automated setup from scratch
+│   ├── fedora-setup.sh         # Automated post-upgrade setup (run after the initial system upgrade + reboot)
 │   ├── apply-system.sh         # Deploy system/ files to their system paths
 │   ├── emulation-setup.sh      # ES-DE + standalone emulators (PS1/2/3, Wii)
 │   ├── rice-start.sh           # Restart Conky
@@ -82,12 +81,17 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 ## Quick Setup (New Machine)
 
 ```bash
+# 1. Update the system to a clean kernel/driver baseline first, then reboot
+sudo dnf upgrade --refresh -y
+sudo reboot
+
+# 2. After the reboot, clone and run the setup
 git clone https://github.com/26zl/fedora-44-kde-setup.git ~/fedora-setup
 cd ~/fedora-setup
 bash scripts/fedora-setup.sh
 ```
 
-> The setup script handles everything except Secure Boot MOK enrollment and BIOS settings, which require manual steps on reboot.
+> The setup script automates most of the guide below. A few steps stay manual: the initial system upgrade + reboot (Step 1), the optional service trimming, applying the Layan Kvantum theme, and Secure Boot MOK enrollment + BIOS settings.
 
 ---
 
@@ -204,7 +208,7 @@ sudo sysctl --system
 
 | Key | Value | Purpose |
 | --- | --- | --- |
-| `vm.swappiness` | `150` | Favour ZRAM over disk swap |
+| `vm.swappiness` | `180` | Favour ZRAM over disk swap |
 | `vm.max_map_count` | `2147483642` | Required for some games (Steam/Proton) |
 | `net.core.rmem_max` | `16777216` | Better network throughput |
 | `net.core.wmem_max` | `16777216` | Better network throughput |
@@ -220,7 +224,7 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
-| `transparent_hugepage/enabled` | `always` | Map memory in 2MB pages — fewer TLB misses |
+| `transparent_hugepage/enabled` | `madvise` | 2MB pages only for processes that opt in via `madvise()` — fewer TLB misses without blanket overhead |
 | `transparent_hugepage/shmem_enabled` | `advise` | Hugepages for shared memory (wine/Proton) |
 | `transparent_hugepage/khugepaged/defrag` | `0` | Disable background defrag — reduces jitter |
 
@@ -663,7 +667,7 @@ Not shipped — provide your own:
 
 ### `scripts/fedora-setup.sh`
 
-Full automated setup from scratch. Run once on a fresh Fedora 44 KDE install. Handles everything except Secure Boot enrollment.
+Automated setup for a fresh Fedora 44 KDE install. Run after the initial system upgrade + reboot. Secure Boot MOK enrollment and BIOS settings stay manual (see the guide).
 
 ### `scripts/emulation-setup.sh`
 
@@ -711,7 +715,7 @@ systemctl is-active scx_loader
 
 # ZRAM
 lsblk | grep zram
-cat /proc/sys/vm/swappiness  # 150
+cat /proc/sys/vm/swappiness  # 180
 
 # Firewall
 firewall-cmd --list-services  # dhcpv6-client kdeconnect

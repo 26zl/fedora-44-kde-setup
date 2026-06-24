@@ -1,8 +1,10 @@
 # PATH
 fish_add_path ~/.local/bin ~/bin
 
-# Homebrew
-eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv fish)
+# Homebrew (only if installed)
+if test -x /home/linuxbrew/.linuxbrew/bin/brew
+    eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv fish)
+end
 
 # eza — colored ls with icons
 alias ls='eza --icons --group-directories-first --color=always'
