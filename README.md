@@ -48,6 +48,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── nvidia-wayland.conf     # /etc/environment.d/ — NVIDIA Wayland env vars
 │   ├── nvidia-performance.conf # /etc/modprobe.d/ — NVIDIA kernel options
 │   ├── 99-tweaks.conf          # /etc/sysctl.d/ — performance tweaks
+│   ├── 99-disable-modules.conf # /etc/modprobe.d/ — blacklist unused protocols (attack surface)
 │   ├── dnf.conf                # /etc/dnf/ — DNF settings
 │   ├── zram-generator.conf     # /etc/systemd/ — ZRAM 8GB
 │   ├── tmp-mount-override.conf # /etc/systemd/system/tmp.mount.d/ — drop tmpfs usrquota
@@ -64,6 +65,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── libinput-overrides.quirks # /etc/libinput/ — disable mouse debouncing
 │   ├── hugepages.conf          # /etc/tmpfiles.d/ — transparent hugepages
 │   ├── kwin-display-fix.sh     # /usr/lib/systemd/system-sleep/ — KWin resume hook
+│   ├── usb-autosuspend.service # /etc/systemd/system/ — autosuspend xHCI-blocking USB devices
 │   ├── plasmalogin.conf        # /etc/plasmalogin.conf — login screen wallpaper
 │   └── plasmalogin-restart.conf # systemd drop-in — auto-restart plasmalogin on crash
 ├── scripts/
@@ -119,7 +121,7 @@ Key settings: `installonly_limit=2` (max 2 kernels), `max_parallel_downloads=10`
 sudo dnf install -y \
   "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
   "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
-sudo dnf groupupdate -y core
+sudo dnf group upgrade -y core
 ```
 
 ### 4. NVIDIA Drivers + Secure Boot
@@ -254,15 +256,18 @@ sensors | grep Tctl  # Verify
 
 ### 11. Firewall Hardening
 
-Default FedoraWorkstation zone has ports 1025-65535 open. Harden to only what's needed:
+Default FedoraWorkstation zone has ports 1025-65535 open, plus the mdns, ssh and samba-client services. Harden to only what's needed:
 
 ```bash
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/udp
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/tcp
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=mdns
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=ssh
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=samba-client
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=dhcpv6-client
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=kdeconnect
 sudo firewall-cmd --reload
-firewall-cmd --list-services  # Verify
+firewall-cmd --list-services  # Verify: dhcpv6-client kdeconnect
 ```
 
 ### 12. Dual-Boot (Clock + Sleep/Hibernate)
@@ -409,7 +414,7 @@ cp configs/fish/functions/ya.fish ~/.config/fish/functions/ya.fish
 ### Shell Tools
 
 ```bash
-sudo dnf install -y zoxide lazygit fzf ripgrep fd-find bat eza
+sudo dnf install -y zoxide lazygit fzf ripgrep fd-find bat eza git-delta
 ```
 
 ### ble.sh (bash syntax highlighting)
@@ -422,7 +427,7 @@ git clone --recursive --depth 1 --shallow-submodules \
 make -C /tmp/ble.sh install PREFIX=~/.local
 ```
 
-`configs/bashrc` is a reference copy of the bashrc additions (aliases, zoxide, mise, starship). `fedora-setup.sh` handles the actual deploy: it prepends the ble.sh `--noattach` loader to line 1, then appends the rest via heredoc — ble.sh requires `--noattach` first and `ble-attach` last.
+`configs/bashrc` holds the bashrc additions (aliases, zoxide, mise, starship). `fedora-setup.sh` handles the deploy: it prepends the ble.sh `--noattach` loader to line 1, then appends `configs/bashrc` itself followed by the `ble-attach` line — ble.sh requires `--noattach` first and `ble-attach` last.
 
 ### mise (Runtime Version Manager)
 
@@ -436,10 +441,9 @@ eval "$(~/.local/bin/mise activate bash)"
 Download prebuilt binary (cargo install often fails on new versions):
 
 ```bash
-YAZI_VER=$(curl -s https://api.github.com/repos/sxyazi/yazi/releases/latest | grep tag_name | cut -d'"' -f4)
-curl -sL "https://github.com/sxyazi/yazi/releases/download/${YAZI_VER}/yazi-x86_64-unknown-linux-gnu.zip" \
+curl -fsSL "https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.zip" \
   -o /tmp/yazi.zip
-unzip -q /tmp/yazi.zip -d /tmp/yazi-bin
+unzip -qo /tmp/yazi.zip -d /tmp/yazi-bin
 sudo install -m755 /tmp/yazi-bin/yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/yazi
 ```
 
@@ -667,7 +671,11 @@ Not shipped — provide your own:
 
 ### `scripts/fedora-setup.sh`
 
-Automated setup for a fresh Fedora 44 KDE install. Run after the initial system upgrade + reboot. Secure Boot MOK enrollment and BIOS settings stay manual (see the guide).
+Automated setup for a fresh Fedora 44 KDE install. Run after the initial system upgrade + reboot. Deploys the `system/` files via `apply-system.sh`. Secure Boot MOK enrollment and BIOS settings stay manual (see the guide).
+
+### `scripts/apply-system.sh`
+
+Deploys every file in `system/` to its live path (see the repository structure above) and reloads what can be reloaded without a reboot. `fedora-setup.sh` calls it during setup; run it standalone to re-apply system configs after editing them.
 
 ### `scripts/emulation-setup.sh`
 

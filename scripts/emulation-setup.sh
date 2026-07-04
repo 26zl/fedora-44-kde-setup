@@ -1,9 +1,9 @@
 #!/bin/bash
-# Retro emulation: ES-DE frontend + standalone emulators (PS1/PS2/PS3, Wii).
-# Run from the repo root: bash scripts/emulation-setup.sh
-# BIOS, firmware and ROMs are user-provided — see the manual steps at the end.
+# Retro emulation: ES-DE frontend + standalone emulators (PS1/PS2/PS3, Wii)
 
 set -e
+cd "$(dirname "$0")/.."
+
 TEAL='\033[38;2;0;200;168m'
 RED='\033[38;2;170;28;28m'
 RESET='\033[0m'
@@ -33,8 +33,7 @@ warn "DuckStation's Flathub build is end-of-life. It still works; for the"
 warn "maintained version use the official AppImage in ~/Applications/ instead."
 
 section "Flatpak ROM access"
-# Default ROM root is ~/Emulation. If ROMs live on another disk, also grant
-# that path, e.g. flatpak override --user --filesystem=/mnt/data <app>
+# ROMs on another disk: also grant that path (flatpak override --user --filesystem=<path> <app>)
 for app in net.pcsx2.PCSX2 org.duckstation.DuckStation net.rpcs3.RPCS3 \
            org.libretro.RetroArch org.DolphinEmu.dolphin-emu; do
     flatpak override --user --filesystem="$HOME/Emulation" "$app"

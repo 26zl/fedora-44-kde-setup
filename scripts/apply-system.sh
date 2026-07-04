@@ -1,8 +1,9 @@
 #!/bin/bash
-# Deploy all system/ files from repo to live system.
-# Run from the repo root: bash scripts/apply-system.sh
+# Deploy all system/ files to their live system paths.
 
 set -e
+cd "$(dirname "$0")/.."
+
 TEAL='\033[38;2;0;200;168m'
 RED='\033[38;2;170;28;28m'
 RESET='\033[0m'
@@ -14,7 +15,7 @@ section() { echo -e "\n${TEAL}━━━ $1 ━━━${RESET}"; }
 section "NVIDIA"
 sudo cp system/nvidia-performance.conf /etc/modprobe.d/nvidia-performance.conf
 sudo cp system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
-sudo systemctl enable nvidia-suspend nvidia-hibernate nvidia-resume.service
+sudo systemctl enable nvidia-suspend nvidia-hibernate nvidia-resume
 ok "nvidia-performance.conf, nvidia-wayland.conf, suspend/resume services enabled"
 
 section "sysctl / DNF / ZRAM"
@@ -25,6 +26,7 @@ sudo cp system/dnf.conf /etc/dnf/dnf.conf
 sudo cp system/macros.image-language-conf /etc/rpm/macros.image-language-conf
 sudo cp system/zram-generator.conf /etc/systemd/zram-generator.conf
 sudo cp system/k10temp.conf /etc/modules-load.d/k10temp.conf
+sudo modprobe k10temp 2>/dev/null || true
 sudo cp system/hugepages.conf /etc/tmpfiles.d/hugepages.conf
 sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ok "99-tweaks.conf, 99-disable-modules.conf, dnf.conf, zram-generator.conf, hugepages.conf"
@@ -35,6 +37,7 @@ sudo grubby --update-kernel=ALL --args="nowatchdog audit=0 skew_tick=1 workqueue
 ok "Kernel parameters set (takes effect on next boot)"
 
 section "SCX scheduler"
+sudo mkdir -p /etc/scx_loader
 sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 ok "scx_loader.toml"
 

@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Check no plaintext passwords or IPs in configs
         run: |
@@ -31,14 +31,33 @@ jobs:
 
       - name: Validate TOML files
         run: |
-          pip install tomli --quiet
           for f in $(find . -name "*.toml" -not -path "./.git/*"); do
             echo "Validating $f"
-            python3 -c "import tomli; tomli.load(open('$f','rb'))" && echo "  OK" || exit 1
+            python3 -c "import tomllib; tomllib.load(open('$f','rb'))" && echo "  OK" || exit 1
           done
+
+      - name: Validate XML files
+        run: |
+          for f in $(find . -name "*.xml" -not -path "./.git/*"); do
+            echo "Validating $f"
+            python3 -c "import xml.etree.ElementTree as ET; ET.parse('$f')" && echo "  OK" || exit 1
+          done
+
+      - name: Validate udev rules
+        run: |
+          udevadm verify --no-style system/*.rules
 
       - name: Check shell scripts are executable-safe
         run: |
-          for f in scripts/*.sh; do
+          for f in scripts/*.sh system/kwin-display-fix.sh; do
             bash -n "$f" && echo "$f: syntax OK" || exit 1
           done
+
+      - name: Check every system/ file is deployed by apply-system.sh
+        run: |
+          missing=0
+          for f in system/*; do
+            base=$(basename "$f")
+            grep -qF "$base" scripts/apply-system.sh || { echo "NOT DEPLOYED by apply-system.sh: $f"; missing=1; }
+          done
+          exit $missing

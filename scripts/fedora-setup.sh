@@ -3,6 +3,8 @@
 # Run as regular user — sudo is called where needed
 
 set -e
+cd "$(dirname "$0")/.."
+
 TEAL='\033[38;2;0;200;168m'
 RED='\033[38;2;170;28;28m'
 RESET='\033[0m'
@@ -17,113 +19,44 @@ sudo cp system/dnf.conf /etc/dnf/dnf.conf
 ok "DNF configured (max 2 kernels, parallel downloads)"
 
 section "Locale debloat"
-sudo dnf swap -y glibc-all-langpacks glibc-langpack-en
+if rpm -q glibc-all-langpacks &>/dev/null; then
+    sudo dnf swap -y glibc-all-langpacks glibc-langpack-en
+    ok "glibc-all-langpacks replaced with glibc-langpack-en"
+else
+    ok "glibc-langpack-en already in place"
+fi
 sudo cp system/macros.image-language-conf /etc/rpm/macros.image-language-conf
 sudo find /usr/share/locale -maxdepth 1 -mindepth 1 -type d ! -name 'en*' ! -name 'C' ! -name 'POSIX' -exec rm -rf {} +
-ok "glibc-all-langpacks replaced with glibc-langpack-en, non-English locales removed"
+ok "Non-English locales removed, langpack macro set"
 
 section "RPM Fusion"
 sudo dnf install -y \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
-sudo dnf groupupdate -y core
+sudo dnf group upgrade -y core
 ok "RPM Fusion free + nonfree installed"
 
 section "NVIDIA drivers"
 sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda nvidia-vaapi-driver
 ok "NVIDIA akmod drivers installed"
 
-sudo cp system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
-sudo cp system/nvidia-performance.conf /etc/modprobe.d/nvidia-performance.conf
-sudo systemctl enable nvidia-suspend nvidia-hibernate nvidia-resume.service
-ok "NVIDIA Wayland environment configured, suspend/resume services enabled"
-
-section "Kernel / sysctl tweaks"
-sudo cp system/99-tweaks.conf /etc/sysctl.d/99-tweaks.conf
-sudo sysctl --system -q
-sudo cp system/hugepages.conf /etc/tmpfiles.d/hugepages.conf
-sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
-ok "sysctl tweaks applied, transparent hugepages configured"
-
-section "Disable unused kernel modules"
-sudo cp system/99-disable-modules.conf /etc/modprobe.d/99-disable-modules.conf
-ok "Blacklisted dccp/sctp/rds/tipc/firewire (attack-surface reduction)"
-
-section "Kernel parameters"
-sudo grubby --update-kernel=ALL --args="nowatchdog audit=0 skew_tick=1 workqueue.power_efficient=false"
-ok "Kernel parameters added (nowatchdog, audit=0, skew_tick=1, workqueue.power_efficient=false) — takes effect on next boot"
-
-section "ZRAM"
-sudo dnf install -y zram-generator
-sudo cp system/zram-generator.conf /etc/systemd/zram-generator.conf
-ok "ZRAM 8GB configured"
-
-section "Disk quota fix (tmpfs)"
-# systemd 256+ mounts /tmp and /dev/shm with an automatic ~12G per-user quota,
-# so writes fail with "Disk quota exceeded" before the tmpfs is full.
-sudo mkdir -p /etc/systemd/system/tmp.mount.d
-sudo cp system/tmp-mount-override.conf /etc/systemd/system/tmp.mount.d/override.conf
-if ! grep -qE '^[[:space:]]*tmpfs[[:space:]]+/dev/shm' /etc/fstab; then
-    echo 'tmpfs  /dev/shm  tmpfs  rw,nosuid,nodev,inode64  0 0' | sudo tee -a /etc/fstab >/dev/null
-fi
-ok "Dropped systemd auto usrquota on /tmp + /dev/shm (takes effect on reboot)"
-
-section "CPU temperature sensor"
-sudo dnf install -y lm_sensors
-sudo cp system/k10temp.conf /etc/modules-load.d/k10temp.conf
-sudo modprobe k10temp
-ok "k10temp loaded and persistent"
-
-section "Firewall hardening"
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=mdns 2>/dev/null || true
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/udp 2>/dev/null || true
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/tcp 2>/dev/null || true
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=dhcpv6-client
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=kdeconnect
-sudo firewall-cmd --reload
-ok "Firewall hardened (dhcpv6-client, kdeconnect only)"
-
-section "DNS hardening (Quad9 + DNSSEC + DoT)"
-sudo mkdir -p /etc/systemd/resolved.conf.d
-sudo cp system/resolved-hardening.conf /etc/systemd/resolved.conf.d/hardening.conf
-sudo systemctl restart systemd-resolved
-ok "Quad9 DNS, DNSSEC=allow-downgrade, DNSOverTLS=opportunistic"
-
-section "Dual-boot (RTC + GRUB default)"
-sudo timedatectl set-local-rtc 0
-# GRUB remembers the last-booted OS — after a Windows hibernate the next full
-# boot lands in GRUB; this makes it re-pick Windows instead of booting Fedora.
-# GRUB_SAVEDEFAULT only takes effect together with GRUB_DEFAULT=saved, so ensure both.
-grub_changed=0
-if ! grep -q '^GRUB_DEFAULT=saved' /etc/default/grub; then
-    if grep -q '^GRUB_DEFAULT=' /etc/default/grub; then
-        sudo sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
-    else
-        echo 'GRUB_DEFAULT=saved' | sudo tee -a /etc/default/grub >/dev/null
-    fi
-    grub_changed=1
-fi
-if ! grep -q '^GRUB_SAVEDEFAULT=true' /etc/default/grub; then
-    echo 'GRUB_SAVEDEFAULT=true' | sudo tee -a /etc/default/grub >/dev/null
-    grub_changed=1
-fi
-if [[ $grub_changed -eq 1 ]]; then
-    sudo grub2-mkconfig -o /boot/grub2/grub.cfg
-fi
-ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
-
 section "System tools"
 sudo dnf install -y \
     steam \
     gamemode \
     mangohud \
+    gamescope \
     htop \
     btop \
     wl-clipboard \
     kvantum \
     conky \
     tuned \
-    scx-scheds
+    scx-scheds \
+    zram-generator \
+    lm_sensors \
+    snapper \
+    btrfs-assistant
 ok "System tools installed"
 
 section "Terminal tools"
@@ -136,12 +69,13 @@ sudo dnf install -y \
     ripgrep \
     fd-find \
     bat \
-    eza
+    eza \
+    git-delta
 
 # fish runs inside kitty (not as login shell — keeps KDE session stable)
 ok "fish installed (used as kitty shell, not login shell)"
 
-# Starship
+# Starship — not packaged in Fedora, use the official installer
 if ! command -v starship &>/dev/null; then
     curl -sS https://starship.rs/install.sh | sh -s -- -y
     ok "Starship installed"
@@ -157,12 +91,13 @@ else
     ok "mise already installed"
 fi
 
-# Yazi (prebuilt binary)
+# Yazi — prebuilt binary; latest/download URL needs no GitHub API call
 if ! command -v yazi &>/dev/null; then
-    YAZI_VER=$(curl -s https://api.github.com/repos/sxyazi/yazi/releases/latest | grep tag_name | cut -d'"' -f4)
-    curl -sL "https://github.com/sxyazi/yazi/releases/download/${YAZI_VER}/yazi-x86_64-unknown-linux-gnu.zip" -o /tmp/yazi.zip
-    unzip -q /tmp/yazi.zip -d /tmp/yazi-bin
+    curl -fsSL "https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.zip" \
+        -o /tmp/yazi.zip
+    unzip -qo /tmp/yazi.zip -d /tmp/yazi-bin
     sudo install -m755 /tmp/yazi-bin/yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/yazi
+    rm -rf /tmp/yazi.zip /tmp/yazi-bin
     ok "Yazi installed"
 else
     ok "Yazi already installed"
@@ -181,7 +116,7 @@ fi
 
 # JetBrainsMono Nerd Font
 mkdir -p ~/.local/share/fonts/JetBrainsMono
-curl -sL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
+curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
     -o /tmp/JetBrainsMono.tar.xz
 tar -xf /tmp/JetBrainsMono.tar.xz -C ~/.local/share/fonts/JetBrainsMono/
 fc-cache -fv -q
@@ -199,28 +134,53 @@ flatpak install -y flathub \
     com.github.wwmm.easyeffects
 ok "ProtonUp-Qt, Heroic, Lutris, Bottles, Prism, GOverlay, EasyEffects installed"
 
-section "NTSync (Wine/Proton CPU optimization)"
-sudo cp system/ntsync.conf /etc/modules-load.d/ntsync.conf
-sudo cp system/99-ntsync.rules /etc/udev/rules.d/99-ntsync.rules
-sudo udevadm control --reload-rules
-sudo modprobe ntsync 2>/dev/null || warn "ntsync module unavailable (needs kernel 6.14+) — modules-load.d will load it at next boot"
-ok "NTSync enabled — Proton uses it automatically"
+section "tuned"
+sudo systemctl enable --now tuned
+ok "tuned enabled (profile is set by apply-system.sh)"
 
-section "Gamescope"
-sudo dnf install -y gamescope
-sudo setcap cap_sys_nice+ep "$(which gamescope)"
-ok "Gamescope installed, CAP_SYS_NICE granted (--rt works)"
+section "System configs (scripts/apply-system.sh)"
+bash scripts/apply-system.sh
+ok "System files deployed via apply-system.sh"
 
 section "SCX scheduler (gaming)"
 sudo systemctl enable --now scx_loader.service
-sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
-ok "scx_lavd Gaming mode enabled"
+ok "scx_lavd Gaming mode enabled (config deployed by apply-system.sh)"
 
-section "tuned performance profile"
-sudo systemctl enable --now tuned
-sudo cp system/tuned-ppd.conf /etc/tuned/ppd.conf
-sudo tuned-adm profile latency-performance
-ok "tuned: latency-performance (PPD performance mapped to latency-performance)"
+section "Gamescope capabilities"
+sudo setcap cap_sys_nice+ep "$(command -v gamescope)"
+ok "Gamescope granted CAP_SYS_NICE (--rt works)"
+
+section "Firewall hardening"
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=mdns 2>/dev/null || true
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=ssh 2>/dev/null || true
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=samba-client 2>/dev/null || true
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/udp 2>/dev/null || true
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/tcp 2>/dev/null || true
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=dhcpv6-client
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=kdeconnect
+sudo firewall-cmd --reload
+ok "Firewall hardened (dhcpv6-client + kdeconnect only; ssh, samba-client, mdns removed)"
+
+section "Dual-boot (RTC + GRUB default)"
+sudo timedatectl set-local-rtc 0
+# GRUB re-picks the last-booted OS after a Windows hibernate wake; GRUB_SAVEDEFAULT requires GRUB_DEFAULT=saved
+grub_changed=0
+if ! grep -q '^GRUB_DEFAULT=saved' /etc/default/grub; then
+    if grep -q '^GRUB_DEFAULT=' /etc/default/grub; then
+        sudo sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
+    else
+        echo 'GRUB_DEFAULT=saved' | sudo tee -a /etc/default/grub >/dev/null
+    fi
+    grub_changed=1
+fi
+if ! grep -q '^GRUB_SAVEDEFAULT=true' /etc/default/grub; then
+    echo 'GRUB_SAVEDEFAULT=true' | sudo tee -a /etc/default/grub >/dev/null
+    grub_changed=1
+fi
+if [[ $grub_changed -eq 1 ]]; then
+    sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+fi
+ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
 
 section "Disable ABRT crash reporters"
 sudo systemctl disable --now abrtd abrt-oops abrt-xorg abrt-journal-core 2>/dev/null || true
@@ -230,8 +190,7 @@ section "KWin latency"
 kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy ExtremelyLow
 kwriteconfig6 --file kwinrc --group Compositing --key MaxFPS 165
 kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true
-# disable KWin's gamepad->keyboard desktop navigation — it hijacks controllers
-# (D-pad->arrows, Cross->Enter, Circle->ESC) and fights emulators/games
+# KWin's gamepad->keyboard desktop navigation hijacks controllers in games/emulators
 kwriteconfig6 --file kwinrc --group Plugins --key gamecontrollerEnabled false
 ok "KWin: ExtremelyLow latency, 165Hz max, blur enabled, gamepad-nav disabled"
 
@@ -242,21 +201,21 @@ kwriteconfig6 --file kscreenlockerrc \
 ok "Lock screen wallpaper set"
 
 section "Snapper (BTRFS snapshots)"
-sudo dnf install -y snapper btrfs-assistant
-if ! snapper list-configs | grep -q "^root"; then
-    sudo snapper -c root create-config /
+# guards need sudo — a plain user can't see root's snapper configs
+if ! sudo snapper list-configs | grep -q "^root"; then
+    sudo snapper -c root create-config / || warn "root config not created (subvolume already covered?)"
 fi
-if ! snapper list-configs | grep -q "^home"; then
-    sudo snapper -c home create-config /home
+if ! sudo snapper list-configs | grep -q "^home"; then
+    sudo snapper -c home create-config /home || warn "home config not created (subvolume already covered?)"
 fi
-if ! sudo snapper -c root list | grep -q "Initial clean setup"; then
-    sudo snapper -c root create --description "Initial clean setup" --cleanup-algorithm number
+if ! sudo snapper -c root list 2>/dev/null | grep -q "Initial clean setup"; then
+    sudo snapper -c root create --description "Initial clean setup" --cleanup-algorithm number || warn "root snapshot failed"
 fi
-if ! sudo snapper -c home list | grep -q "Initial home snapshot"; then
-    sudo snapper -c home create --description "Initial home snapshot" --cleanup-algorithm number
+if ! sudo snapper -c home list 2>/dev/null | grep -q "Initial home snapshot"; then
+    sudo snapper -c home create --description "Initial home snapshot" --cleanup-algorithm number || warn "home snapshot failed"
 fi
 sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
-ok "Snapper installed — root + home snapshots taken, timeline enabled"
+ok "Snapper: root + home snapshots, timeline enabled"
 
 section "Audio (WirePlumber)"
 mkdir -p ~/.config/wireplumber/wireplumber.conf.d
@@ -265,43 +224,7 @@ cp configs/wireplumber/wireplumber.conf.d/50-audio.conf \
 systemctl --user restart wireplumber
 ok "WirePlumber: unused audio devices disabled, NVIDIA HDMI pro-audio configured"
 
-section "Peripheral udev rules (mouse + controller)"
-sudo cp system/99-lamzu.rules /etc/udev/rules.d/99-lamzu.rules
-sudo cp system/99-dualsense.rules /etc/udev/rules.d/99-dualsense.rules
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-ok "LAMZU Maya X 8K + DualSense rules installed (configure LAMZU via lamzu.net in Chrome)"
-
-section "libinput debounce"
-sudo mkdir -p /etc/libinput
-sudo cp system/libinput-overrides.quirks /etc/libinput/local-overrides.quirks
-ok "libinput eager debouncing disabled (Hall Effect sensor — no debounce needed)"
-
-section "Suspend / resume fixes"
-sudo cp system/99-disable-wakeup.rules /etc/udev/rules.d/99-disable-wakeup.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
-sudo cp system/kwin-display-fix.sh /usr/lib/systemd/system-sleep/kwin-display-fix.sh
-sudo chmod +x /usr/lib/systemd/system-sleep/kwin-display-fix.sh
-sudo cp system/usb-autosuspend.service /etc/systemd/system/usb-autosuspend.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now usb-autosuspend.service
-ok "USB wakeup disabled, USB autosuspend service enabled, KWin display resume hook installed"
-
-section "plasmalogin restart on failure (NVIDIA logout fix)"
-sudo mkdir -p /etc/systemd/system/plasmalogin.service.d
-sudo cp system/plasmalogin-restart.conf /etc/systemd/system/plasmalogin.service.d/restart.conf
-sudo systemctl daemon-reload
-ok "plasmalogin restarts automatically on NVIDIA Wayland logout crash"
-
-section "Login screen wallpaper"
-sudo mkdir -p /usr/share/wallpapers/custom
-sudo cp wallpaper/wallpaper.jpg /usr/share/wallpapers/custom/wallpaper.jpg
-sudo cp system/plasmalogin.conf /etc/plasmalogin.conf
-ok "Login screen wallpaper set"
-
-
 section "Writing user configs"
-
 mkdir -p ~/.config/kitty ~/.config/conky \
          ~/.config/Kvantum ~/.local/share/color-schemes \
          ~/scripts ~/Pictures ~/.config/fish/functions \
@@ -323,42 +246,16 @@ cp scripts/rice-start.sh scripts/sysinfo.sh ~/scripts/
 chmod +x ~/scripts/rice-start.sh ~/scripts/sysinfo.sh
 ok "Scripts installed to ~/scripts/"
 
-
-# bashrc — ble.sh must load at the very top (before other config)
+# ble.sh requires --noattach first and ble-attach last; configs/bashrc goes in between
 if ! grep -q 'blesh/ble.sh' ~/.bashrc; then
     sed -i '1s|^|[[ $- == *i* ]] \&\& source ~/.local/share/blesh/ble.sh --noattach\n\n|' ~/.bashrc
     ok "$HOME/.bashrc: ble.sh --noattach added at top"
 fi
-
-# bashrc additions
 if ! grep -q 'zoxide init' ~/.bashrc; then
-cat >> ~/.bashrc <<'EOF'
-
-eval "$(zoxide init bash)"
-
-# lazygit
-alias lg='lazygit'
-
-# yazi — cd into directory on exit
-ya() {
-  local tmp cwd
-  tmp="$(mktemp -t "yazi-cwd.XXXXXX")"
-  yazi "$@" --cwd-file="$tmp"
-  if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
-    builtin cd -- "$cwd"
-  fi
-  rm -f -- "$tmp"
-}
-
-# mise — runtime version manager
-eval "$(~/.local/bin/mise activate bash 2>/dev/null)" || true
-
-# Starship prompt
-eval "$(starship init bash)"
-
-[[ ${BLE_VERSION-} ]] && ble-attach
-EOF
-    ok "$HOME/.bashrc updated"
+    # the ble-attach line must land in .bashrc unexpanded
+    # shellcheck disable=SC2016
+    { echo ""; cat configs/bashrc; echo ""; echo '[[ ${BLE_VERSION-} ]] && ble-attach'; } >> ~/.bashrc
+    ok "$HOME/.bashrc: configs/bashrc appended, ble-attach added last"
 fi
 
 cp configs/systemd/conky.service ~/.config/systemd/user/conky.service
@@ -367,17 +264,18 @@ systemctl --user enable --now conky.service
 ok "Conky systemd user service installed and enabled"
 
 section "Setup complete"
-warn "Before rebooting (Secure Boot — run this now, not after the reboot):"
-echo "  1. Queue the NVIDIA MOK key: sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
-echo "     → then reboot and pick 'Enroll MOK' at the blue MOK Manager screen"
+warn "Before rebooting (Secure Boot):"
+echo "  1. Wait ~5 min for the NVIDIA kernel module to build, then:"
+echo "       sudo akmods --force && sudo dracut --force"
+echo "  2. Queue the MOK key: sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
+echo "     → reboot and pick 'Enroll MOK' at the blue MOK Manager screen"
 echo ""
 warn "After reboot:"
-echo "  2. Wait ~5 min for the NVIDIA kernel module to build, then: sudo akmods --force && sudo dracut --force"
 echo "  3. KDE Settings → Colors → DarthVader → Apply"
 echo "  4. KDE Settings → Application Style → kvantum → Apply"
 echo "  5. KDE Settings → Fonts → Fixed width → JetBrainsMono Nerd Font"
 echo "  6. KDE Settings → Wallpaper → ~/Pictures/wallpaper.jpg"
-echo "  7. Start Conky: conky --daemonize --pause=3 --config=~/.config/conky/conky.conf"
 echo ""
+info "Conky runs as a systemd user service (systemctl --user status conky)"
 info "For retro emulation (ES-DE + PS1/PS2/PS3/Wii): bash scripts/emulation-setup.sh"
 ok "Reboot recommended."

@@ -1,10 +1,10 @@
 [Unit]
 Description=USB autosuspend for xHCI-blocking devices
-# drivers override power/control after udev add/bind — write directly after boot
-After=systemd-udev-settle.service
+# drivers override power/control after udev add/bind — write directly once coldplug settles
 
 [Service]
 Type=oneshot
+ExecStartPre=-/usr/bin/udevadm settle --timeout=10
 ExecStart=/bin/bash -c '\
   for dev in /sys/bus/usb/devices/*/; do \
     vid=$(cat "$dev/idVendor" 2>/dev/null); \

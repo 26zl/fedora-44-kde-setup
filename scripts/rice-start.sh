@@ -1,8 +1,5 @@
 #!/bin/bash
-# Rice starter — restarts Conky
+# Rice starter — restarts the Conky user service
 
-pkill conky 2>/dev/null
-sleep 1
-
-conky --daemonize --pause=3 --config="$HOME/.config/conky/conky.conf"
+systemctl --user restart conky.service
 echo "Rice is live."

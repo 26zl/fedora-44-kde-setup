@@ -22,8 +22,13 @@ echo -e "  ${GRAY}uptime ${RESET}${WHITE}${UPTIME}${RESET}"
 
 line
 
-# CPU
-CPU_LOAD=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$3+$4+$5)} END {printf "%.1f", usage}')
+# CPU — /proc/stat is cumulative since boot, so sample twice and use the delta
+read -r _ u1 n1 s1 i1 w1 _ < /proc/stat
+sleep 0.5
+read -r _ u2 n2 s2 i2 w2 _ < /proc/stat
+CPU_LOAD=$(awk -v busy=$(( (u2 + n2 + s2) - (u1 + n1 + s1) )) \
+               -v total=$(( (u2 + n2 + s2 + i2 + w2) - (u1 + n1 + s1 + i1 + w1) )) \
+               'BEGIN {printf "%.1f", total ? busy * 100 / total : 0}')
 CPU_FREQ=$(grep 'cpu MHz' /proc/cpuinfo | awk '{sum+=$4; count++} END {printf "%.2f", sum/count/1000}')
 CPU_TEMP=$(sensors 2>/dev/null | grep 'Tctl:' | awk '{print $2}' | tr -d '+')
 echo -e "  ${TEAL}CPU  ${GRAY}Ryzen 9 9900X${RESET}"

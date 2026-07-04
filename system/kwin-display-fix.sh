@@ -1,8 +1,6 @@
 #!/bin/bash
-# Bus 3 (0000:13:00.0) requires all devices autosuspended before xHCI can enter D3.
-# LAMZU dongle (373e:001e) fails autosuspend with -110 (RF receiver must stay active),
-# so we deauthorize it before sleep and re-authorize after. Other input devices get
-# power/control=auto. All restored on post-resume.
+# xHCI bus 3 only reaches D3 when every device autosuspends; the LAMZU dongle
+# (373e:001e) can't (-110), so it is deauthorized over sleep and re-authorized on resume.
 AUTOSUSPEND_DEVS="048d:5711 046d:c548"
 DEAUTH_DEVS="373e:001e"
 

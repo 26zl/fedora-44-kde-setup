@@ -1,9 +1,6 @@
 <?xml version="1.0"?>
-<!-- Deployed to ~/ES-DE/custom_systems/es_systems.xml
-     Overrides the default emulator per system so ES-DE uses the standalone
-     emulators (which are installed) instead of the libretro cores (which are
-     not). Without this, launching a game errors with "couldn't find emulator
-     core file <x>_libretro.so". First <command> = default. -->
+<!-- ~/ES-DE/custom_systems/es_systems.xml — defaults each system to the installed
+     standalone emulator instead of a libretro core; first <command> is the default. -->
 <systemList>
     <system>
         <name>psx</name>
@@ -20,7 +17,7 @@
         <name>ps2</name>
         <fullname>Sony PlayStation 2</fullname>
         <path>%ROMPATH%/ps2</path>
-        <extension>.bin .BIN .chd .CHD .ciso .CISO .cso .CSO .desktop .dump .DUMP .elf .ELF .gz .GZ .m3u .M3U .mdf .MDF .img .IMG .iso .ISO .isz .ISZ .ngr .NRG .zso .ZSO</extension>
+        <extension>.bin .BIN .chd .CHD .ciso .CISO .cso .CSO .desktop .dump .DUMP .elf .ELF .gz .GZ .m3u .M3U .mdf .MDF .img .IMG .iso .ISO .isz .ISZ .nrg .NRG .zso .ZSO</extension>
         <command label="PCSX2 (Standalone)">%EMULATOR_PCSX2% -batch %ROM%</command>
         <command label="LRPS2">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx2_libretro.so %ROM%</command>
         <platform>ps2</platform>
