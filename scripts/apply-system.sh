@@ -94,11 +94,12 @@ ok "99-ntsync.rules, ntsync.conf"
 section "Disk quota fix (tmpfs)"
 sudo mkdir -p /etc/systemd/system/tmp.mount.d
 sudo cp system/tmp-mount-override.conf /etc/systemd/system/tmp.mount.d/override.conf
-if ! grep -qE '^[[:space:]]*tmpfs[[:space:]]+/dev/shm' /etc/fstab; then
-    echo 'tmpfs  /dev/shm  tmpfs  rw,nosuid,nodev,inode64  0 0' | sudo tee -a /etc/fstab >/dev/null
-fi
+sudo mkdir -p /etc/systemd/system/user-runtime-dir@.service.d
+sudo cp system/user-runtime-dir-noquota.conf /etc/systemd/system/user-runtime-dir@.service.d/noquota.conf
 sudo systemctl daemon-reload
-ok "Dropped systemd auto usrquota on /tmp + /dev/shm (takes effect on reboot)"
+# drop-in clears /dev/shm limit at each login; clear the current session now too
+sudo setquota -u "$(id -u)" 0 0 0 0 /dev/shm 2>/dev/null || true
+ok "usrquota dropped on /tmp (reboot); /dev/shm per-user limit cleared at each login"
 
 section "Done"
 ok "All system files deployed. Reboot recommended if modprobe/zram configs changed."
