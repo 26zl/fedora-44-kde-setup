@@ -72,6 +72,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── fedora-setup.sh         # Automated post-upgrade setup (run after the initial system upgrade + reboot)
 │   ├── apply-system.sh         # Deploy system/ files to their system paths
 │   ├── emulation-setup.sh      # ES-DE + standalone emulators (PS1/2/3, Wii)
+│   ├── setup-github.sh         # GitHub CLI login + git identity/defaults
 │   ├── rice-start.sh           # Restart Conky
 │   └── sysinfo.sh              # System health overview in terminal
 └── wallpaper/
