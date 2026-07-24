@@ -356,11 +356,70 @@ systemd 256+ mounts `/tmp` and `/dev/shm` with an automatic per-user quota (~12 
 sudo mkdir -p /etc/systemd/system/tmp.mount.d
 sudo cp system/tmp-mount-override.conf /etc/systemd/system/tmp.mount.d/override.conf
 
-# /dev/shm — no mount unit to override, so use fstab
-echo 'tmpfs  /dev/shm  tmpfs  rw,nosuid,nodev,inode64  0 0' | sudo tee -a /etc/fstab
+# /dev/shm — mounted before any unit exists, and remount cannot drop tmpfs quota.
+# The limit is (re)applied by systemd-user-runtime-dir at every login, so clear it
+# right after, from the unit that sets it.
+sudo mkdir -p /etc/systemd/system/user-runtime-dir@.service.d
+sudo cp system/user-runtime-dir-noquota.conf \
+        /etc/systemd/system/user-runtime-dir@.service.d/noquota.conf
+sudo systemctl daemon-reload
 ```
 
-Takes effect on reboot.
+`/tmp` takes effect on reboot; `/dev/shm` from the next login. An `/etc/fstab` entry for
+`/dev/shm` does **not** work — verified live, the quota survives it.
+
+---
+
+## Security Tooling
+
+Not installed by `fedora-setup.sh` — these live on the system rather than in the repo,
+documented here so the machine's security posture is reproducible.
+
+### Auditing and integrity
+
+```bash
+sudo dnf install -y lynis aide rkhunter
+```
+
+| Tool | Use |
+|---|---|
+| `lynis` | Whole-system audit: `sudo lynis audit system` |
+| `aide` | File integrity: `sudo aide --init` for a baseline, `sudo aide --check` after |
+| `rkhunter` | Rootkit scan: `sudo rkhunter --check` |
+| `audit` | Installed but disabled on purpose — the kernel boots with `audit=0` (see Kernel Parameters) |
+
+AIDE flags every package update as a change; refresh the baseline with `sudo aide --update`.
+
+### Malware scanning
+
+`clamav` + `clamd`. Update signatures with `sudo freshclam`, scan with `clamscan -r <path>`.
+
+### Sandboxing and mandatory access control
+
+SELinux runs `enforcing` with the targeted policy — verify with `sestatus`, and use
+`setroubleshoot` to explain denials. Flatpak sandboxes applications through `bubblewrap`.
+Firejail is deliberately not used: it is SUID, has had its own privilege-escalation CVEs,
+and Flatpak already covers the GUI applications here.
+
+### Network and analysis
+
+`nmap`, `wireshark` (+ `wireshark-cli`), `tcpdump`, `socat`, `nmap-ncat`. For web work,
+`sqlmap` and ProjectDiscovery's `httpx` sit in `/usr/local/bin`, and Ghidra is installed
+as a Flatpak for reverse engineering.
+
+### Crypto and secrets
+
+`cryptsetup` (LUKS), `gnupg2`, `openssl`, plus `age` and `sops` for encrypted files in Git.
+
+### Firewall and VPN
+
+`firewalld` (see Firewall Hardening above), `mullvad-vpn`, `tailscale`, `wireguard-tools`,
+`openvpn`. DNS never gets a forced global resolver — see `system/resolved-hardening.conf`.
+
+### Firmware and Secure Boot
+
+`mokutil` manages enrolled keys (see NVIDIA Drivers + Secure Boot), `fwupd` applies
+firmware updates (`fwupdmgr refresh && fwupdmgr update`), `efibootmgr` lists boot entries.
 
 ---
 
