@@ -79,6 +79,12 @@ sudo cp wallpaper/wallpaper.jpg /usr/share/wallpapers/custom/wallpaper.jpg
 sudo cp system/plasmalogin.conf /etc/plasmalogin.conf
 ok "Login screen wallpaper set"
 
+section "journald limits"
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo cp system/journald-limits.conf /etc/systemd/journald.conf.d/limits.conf
+sudo systemctl restart systemd-journald
+ok "journal capped at 1G (systemd default here was 4G)"
+
 section "Firefox policies"
 sudo mkdir -p /etc/firefox/policies
 sudo cp system/firefox-policies.json /etc/firefox/policies/policies.json
