@@ -332,9 +332,12 @@ systemctl --user disable --now \
   app-sealertauto@autostart.service \
   app-org.freedesktop.problems.applet@autostart.service
 
-# Akonadi (KDE PIM — only needed if using KMail/Kontact)
-systemctl --user disable --now akonadi_control.service
+# Akonadi (KDE PIM — only needed if using KMail/Kontact). It pulls in ~16 processes
+# and its own MariaDB. The unit has no [Install] section, so `disable` fails — mask it.
+systemctl --user mask --now akonadi_control.service
 ```
+
+Undo with `systemctl --user unmask akonadi_control.service`.
 
 ### 15. libinput Debouncing
 
