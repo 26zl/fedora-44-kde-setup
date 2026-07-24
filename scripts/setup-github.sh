@@ -4,6 +4,12 @@
 
 set -e
 
+# gh stores credentials per user and opens the user's browser — sudo breaks both
+if [ "$EUID" -eq 0 ]; then
+    echo "Run without sudo: bash scripts/setup-github.sh" >&2
+    exit 1
+fi
+
 TEAL='\033[38;2;0;200;168m'
 RESET='\033[0m'
 
