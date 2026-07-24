@@ -79,6 +79,11 @@ sudo cp wallpaper/wallpaper.jpg /usr/share/wallpapers/custom/wallpaper.jpg
 sudo cp system/plasmalogin.conf /etc/plasmalogin.conf
 ok "Login screen wallpaper set"
 
+section "Firefox policies"
+sudo mkdir -p /etc/firefox/policies
+sudo cp system/firefox-policies.json /etc/firefox/policies/policies.json
+ok "Firefox: telemetry, Studies, Pocket and sponsored content off; tracking protection on"
+
 section "libinput debounce"
 sudo mkdir -p /etc/libinput
 sudo cp system/libinput-overrides.quirks /etc/libinput/local-overrides.quirks

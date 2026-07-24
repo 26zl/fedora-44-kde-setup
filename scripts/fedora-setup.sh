@@ -70,6 +70,7 @@ sudo dnf install -y \
     fd-find \
     bat \
     eza \
+    fastfetch \
     git-delta
 
 # fish runs inside kitty (not as login shell — keeps KDE session stable)
@@ -194,6 +195,22 @@ kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true
 kwriteconfig6 --file kwinrc --group Plugins --key gamecontrollerEnabled false
 ok "KWin: ExtremelyLow latency, 165Hz max, blur enabled, gamepad-nav disabled"
 
+section "KDE annoyances"
+# zoom (Meta+=) and shake-to-find cursor both fire by accident
+kwriteconfig6 --file kwinrc --group Plugins --key zoomEnabled false
+kwriteconfig6 --file kwinrc --group Plugins --key shakecursorEnabled false
+# Meta alone opens the launcher — games that use Meta as a modifier trigger it
+kwriteconfig6 --file kwinrc --group ModifierOnlyShortcuts --key Meta ""
+kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Bouncing false
+kwriteconfig6 --file ksplashrc --group KSplash --key Engine none
+kwriteconfig6 --file ksplashrc --group KSplash --key Theme None
+# start each login clean instead of reopening the last session
+kwriteconfig6 --file ksmserverrc --group General --key loginMode emptySession
+kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0.5
+# Baloo indexes all of $HOME in the background; no file-content search used here
+kwriteconfig6 --file baloofilerc --group "Basic Settings" --key "Indexing-Enabled" false
+ok "KDE: zoom/shake/Meta-launcher/bounce/splash off, clean login, 0.5x animations, Baloo off"
+
 section "Lock screen wallpaper"
 kwriteconfig6 --file kscreenlockerrc \
   --group "Greeter" --group "Wallpaper" --group "org.kde.image" --group "General" \
@@ -229,9 +246,10 @@ mkdir -p ~/.config/kitty ~/.config/conky \
          ~/.config/Kvantum ~/.local/share/color-schemes \
          ~/scripts ~/Pictures ~/.config/fish/functions \
          ~/.local/share/plasma/desktoptheme \
-         ~/.config/systemd/user
+         ~/.config/systemd/user ~/.config/fastfetch
 
 cp configs/kitty/kitty.conf ~/.config/kitty/kitty.conf
+cp configs/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc
 cp configs/starship/starship.toml ~/.config/starship.toml
 cp configs/conky/conky.conf ~/.config/conky/conky.conf
 cp configs/kde/DarthVader.colors ~/.local/share/color-schemes/DarthVader.colors
