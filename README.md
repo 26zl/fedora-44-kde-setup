@@ -401,15 +401,9 @@ SELinux runs `enforcing` with the targeted policy — verify with `sestatus`, an
 Firejail is deliberately not used: it is SUID, has had its own privilege-escalation CVEs,
 and Flatpak already covers the GUI applications here.
 
-### Network and analysis
+### Disk and system crypto
 
-`nmap`, `wireshark` (+ `wireshark-cli`), `tcpdump`, `socat`, `nmap-ncat`. For web work,
-`sqlmap` and ProjectDiscovery's `httpx` sit in `/usr/local/bin`, and Ghidra is installed
-as a Flatpak for reverse engineering.
-
-### Crypto and secrets
-
-`cryptsetup` (LUKS), `gnupg2`, `openssl`, plus `age` and `sops` for encrypted files in Git.
+`cryptsetup` (LUKS), `gnupg2`, `openssl`.
 
 ### Firewall and VPN
 
