@@ -74,7 +74,9 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── emulation-setup.sh      # ES-DE + standalone emulators (PS1/2/3, Wii)
 │   ├── setup-github.sh         # GitHub CLI login + git identity/defaults
 │   ├── rice-start.sh           # Restart Conky
-│   └── sysinfo.sh              # System health overview in terminal
+│   ├── sysinfo.sh              # System health overview in terminal
+│   ├── deep-health.sh          # Full hardware audit — firmware, SMART, btrfs scrub, self-test
+│   └── mok-reenroll.sh         # Re-enroll the akmods MOK after a BIOS flash
 └── wallpaper/
     └── wallpaper.jpg           # Darth Vader — dark, teal glow, red lightsaber
 ```
@@ -742,6 +744,16 @@ Retro emulation setup — installs ES-DE (Terra repo) and the standalone emulato
 
 Quick system health check in terminal. Shows CPU/GPU temps, load, RAM, disk, network, top processes, and warnings if anything exceeds 85%.
 
+### `scripts/deep-health.sh`
+
+Full hardware audit: BIOS version and POST time, Secure Boot and MOK state, machine check counters, per-DIMM memory speed, temperatures, NVMe SMART plus a short self-test, btrfs error counters and scrub, NTFS state, GPU, failed units. `sysinfo.sh` is the glance; this is the check after a BIOS flash or when boot feels wrong. Takes around six minutes — the scrub and the self-test dominate.
+
+Firmware time above ~25s on this board means the embedded controller is wedged. A reboot and Load Optimized Defaults do not clear it; only a full standby power drain does — PSU switch off, hold the case power button 30 seconds.
+
+### `scripts/mok-reenroll.sh`
+
+Re-enrolls the akmods signing key. A BIOS flash clears UEFI NVRAM and takes the MOK list with it, so the locally signed NVIDIA modules fail signature verification, nouveau claims the card, and Plasma comes up to a black screen. The machine still boots to a TTY — run this from there, reboot, then pick Enroll MOK on the blue screen. Exits early if the key is still enrolled.
+
 ### `scripts/rice-start.sh` — alias: `rice`
 
 Restarts Conky.
@@ -750,8 +762,8 @@ Restarts Conky.
 
 ```bash
 mkdir -p ~/scripts
-cp scripts/rice-start.sh scripts/sysinfo.sh ~/scripts/
-chmod +x ~/scripts/rice-start.sh ~/scripts/sysinfo.sh
+cp scripts/rice-start.sh scripts/sysinfo.sh scripts/deep-health.sh scripts/mok-reenroll.sh ~/scripts/
+chmod +x ~/scripts/{rice-start,sysinfo,deep-health,mok-reenroll}.sh
 ```
 
 Aliases (`rice`, `sysinfo`) are already in `configs/fish/config.fish` — deployed by `fedora-setup.sh`.
