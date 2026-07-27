@@ -242,7 +242,7 @@ sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue
 | Parameter | Purpose |
 | --- | --- |
 | `nowatchdog` | Disable watchdog timers — reduces interrupts |
-| `audit=1` | Enable the audit framework so `auditd` can collect events. The RHEL latency guide suggests `audit=0`, but the overhead is ~1-3% on syscall-heavy work and unmeasurable in GPU-bound games — not worth losing security logging. `auditd.service` has `ConditionKernelCommandLine=!audit=0`, so with `audit=0` it silently refuses to start even when enabled |
+| `audit=1` | Enable the audit framework — `auditd.service` has `ConditionKernelCommandLine=!audit=0` and will not start without it |
 | `skew_tick=1` | Skew timer ticks across cores — reduces lock contention |
 | `workqueue.power_efficient=false` | Disable power-efficient workqueues — prevents cross-core cache misses |
 
@@ -273,7 +273,7 @@ sudo firewall-cmd --reload
 firewall-cmd --list-services  # Verify: dhcpv6-client
 ```
 
-KDE Connect is out: `kdeconnectd` binds `0.0.0.0:1716` plus several random UDP ports, so an unpaired daemon is pure LAN attack surface. Add the service back (and unmask the autostart unit) if you actually pair a phone.
+`kdeconnect` is removed from the zone — add it back if you pair a phone (see Disable Unnecessary Services).
 
 ### 12. Dual-Boot (Clock + Sleep/Hibernate)
 
@@ -329,9 +329,8 @@ sudo systemctl disable --now ModemManager avahi-daemon pcscd
 sudo systemctl disable --now cups.service cups.socket cups.path   # no printer
 sudo systemctl disable --now gssproxy.service                     # no NFS mounts
 
-# KDE Connect binds 0.0.0.0:1716 plus random UDP ports — pure LAN attack surface
-# when no phone is paired. Masking autostart is not enough: Plasma re-activates
-# the daemon over D-Bus, so shadow the service file too.
+# KDE Connect binds 0.0.0.0:1716 plus random UDP ports. Masking autostart alone
+# is not enough — Plasma re-activates the daemon over D-Bus, so shadow it too.
 printf '[Desktop Entry]\nType=Application\nName=KDE Connect\nHidden=true\n' \
   > ~/.config/autostart/org.kde.kdeconnect.daemon.desktop
 systemctl --user mask app-org.kde.kdeconnect.daemon@autostart.service
@@ -412,18 +411,7 @@ sudo dnf install -y lynis aide rkhunter
 
 AIDE flags every package update as a change; refresh the baseline with `sudo aide --update`.
 
-### Lynis findings deliberately not applied
-
-`sudo lynis audit system` scores ~76 on this box. These suggestions are wrong for this hardware and must not be "fixed":
-
-| Suggestion | Why it's rejected |
-|---|---|
-| `net.ipv4.conf.all.rp_filter=1` | Strict reverse-path filtering breaks Tailscale and Mullvad routing. Fedora ships `2` (loose) for exactly this reason |
-| `kernel.modules_disabled=1` | Blocks all module loading — kills NVIDIA, USB and hotplug |
-| `vm.swappiness` too high | `180` is deliberate for ZRAM; Lynis assumes disk swap |
-| Disable USB storage | The external SSD holds the ROM library |
-| `kernel.unprivileged_bpf_disabled=1` | Already set to `2`, which is stricter — Lynis only checks for equality |
-| Legal banners, password aging, separate `/var` | Single-user desktop with no SSH daemon |
+Lynis suggestions that must not be applied here: `rp_filter=1` (breaks Tailscale and VPN routing), `kernel.modules_disabled=1` (blocks NVIDIA and USB), lower `vm.swappiness` (180 is set for ZRAM), disabling USB storage.
 
 ### Malware scanning
 
