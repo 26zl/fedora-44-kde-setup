@@ -188,18 +188,14 @@ sudo systemctl disable --now abrtd abrt-oops abrt-xorg abrt-journal-core 2>/dev/
 ok "ABRT disabled (reduces background CPU/RAM usage)"
 
 section "Disable unused listening services"
-# cups: no printer. gssproxy: no NFS. kdeconnect: listens on the LAN unpaired.
+# cups: no printer. gssproxy: no NFS — mask it, auth-rpcgss-module.service pulls
+# a merely-disabled unit back in. kde-connect: binds the LAN with nothing paired,
+# and masking it makes plasmashell block on D-Bus activation, so remove it.
 sudo systemctl disable --now cups.service cups.socket cups.path 2>/dev/null || true
-sudo systemctl disable --now gssproxy.service 2>/dev/null || true
-mkdir -p ~/.config/autostart ~/.local/share/dbus-1/services
-printf '[Desktop Entry]\nType=Application\nName=KDE Connect\nHidden=true\n' \
-    > ~/.config/autostart/org.kde.kdeconnect.daemon.desktop
-systemctl --user mask app-org.kde.kdeconnect.daemon@autostart.service 2>/dev/null || true
-# masking autostart is not enough — Plasma re-activates the daemon over D-Bus
-printf '[D-BUS Service]\nName=org.kde.kdeconnect\nExec=/bin/true\n' \
-    > ~/.local/share/dbus-1/services/org.kde.kdeconnect.service
-pkill -x kdeconnectd 2>/dev/null || true
-ok "cups, gssproxy, KDE Connect disabled"
+sudo systemctl mask --now gssproxy.service 2>/dev/null || true
+sudo dnf mark user fuse-sshfs openssh-askpass 2>/dev/null || true
+sudo dnf remove -y kde-connect 2>/dev/null || true
+ok "cups, gssproxy, KDE Connect removed"
 
 section "auditd"
 # the kernel cmdline sets audit=1 — without the daemon nothing collects the events

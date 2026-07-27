@@ -325,19 +325,17 @@ To restore, boot from a live USB, mount the BTRFS partition, and use `btrfs subv
 # System services
 sudo systemctl disable --now ModemManager avahi-daemon pcscd
 
-# Unused services that hold listening sockets (Lynis: cups/gssproxy are UNSAFE-rated)
+# Unused services holding sockets. gssproxy must be masked, not disabled —
+# auth-rpcgss-module.service pulls it back in through WantedBy.
 sudo systemctl disable --now cups.service cups.socket cups.path   # no printer
-sudo systemctl disable --now gssproxy.service                     # no NFS mounts
+sudo systemctl mask --now gssproxy.service                        # no NFS mounts
 
-# KDE Connect binds 0.0.0.0:1716 plus random UDP ports. Masking autostart alone
-# is not enough — Plasma re-activates the daemon over D-Bus, so shadow it too.
-printf '[Desktop Entry]\nType=Application\nName=KDE Connect\nHidden=true\n' \
-  > ~/.config/autostart/org.kde.kdeconnect.daemon.desktop
-systemctl --user mask app-org.kde.kdeconnect.daemon@autostart.service
-mkdir -p ~/.local/share/dbus-1/services
-printf '[D-BUS Service]\nName=org.kde.kdeconnect\nExec=/bin/true\n' \
-  > ~/.local/share/dbus-1/services/org.kde.kdeconnect.service
-pkill -x kdeconnectd
+# KDE Connect binds 0.0.0.0:1716 plus random UDP ports. Remove the package rather
+# than masking it — Plasma re-activates the daemon over D-Bus, and a stub D-Bus
+# service makes plasmashell block for 25s per attempt and the panel disappear.
+# Keep the two dependencies that are useful on their own.
+sudo dnf mark user fuse-sshfs openssh-askpass
+sudo dnf remove -y kde-connect
 
 # Baloo file indexer (major CPU offender)
 balooctl6 disable
@@ -813,7 +811,7 @@ lsblk | grep zram
 cat /proc/sys/vm/swappiness  # 180
 
 # Firewall
-firewall-cmd --list-services  # dhcpv6-client kdeconnect
+firewall-cmd --list-services  # dhcpv6-client
 
 # Temperature
 sensors | grep Tctl
