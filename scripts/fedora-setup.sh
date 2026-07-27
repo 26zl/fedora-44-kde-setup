@@ -157,10 +157,10 @@ sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=ssh 2>/d
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=samba-client 2>/dev/null || true
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/udp 2>/dev/null || true
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/tcp 2>/dev/null || true
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=kdeconnect 2>/dev/null || true
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=dhcpv6-client
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=kdeconnect
 sudo firewall-cmd --reload
-ok "Firewall hardened (dhcpv6-client + kdeconnect only; ssh, samba-client, mdns removed)"
+ok "Firewall hardened (dhcpv6-client only; ssh, samba-client, mdns, kdeconnect removed)"
 
 section "Dual-boot (RTC + GRUB default)"
 sudo timedatectl set-local-rtc 0
@@ -186,6 +186,25 @@ ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
 section "Disable ABRT crash reporters"
 sudo systemctl disable --now abrtd abrt-oops abrt-xorg abrt-journal-core 2>/dev/null || true
 ok "ABRT disabled (reduces background CPU/RAM usage)"
+
+section "Disable unused listening services"
+# cups: no printer. gssproxy: no NFS. kdeconnect: listens on the LAN unpaired.
+sudo systemctl disable --now cups.service cups.socket cups.path 2>/dev/null || true
+sudo systemctl disable --now gssproxy.service 2>/dev/null || true
+mkdir -p ~/.config/autostart ~/.local/share/dbus-1/services
+printf '[Desktop Entry]\nType=Application\nName=KDE Connect\nHidden=true\n' \
+    > ~/.config/autostart/org.kde.kdeconnect.daemon.desktop
+systemctl --user mask app-org.kde.kdeconnect.daemon@autostart.service 2>/dev/null || true
+# masking autostart is not enough — Plasma re-activates the daemon over D-Bus
+printf '[D-BUS Service]\nName=org.kde.kdeconnect\nExec=/bin/true\n' \
+    > ~/.local/share/dbus-1/services/org.kde.kdeconnect.service
+pkill -x kdeconnectd 2>/dev/null || true
+ok "cups, gssproxy, KDE Connect disabled"
+
+section "auditd"
+# the kernel cmdline sets audit=1 — without the daemon nothing collects the events
+sudo systemctl enable --now auditd
+ok "auditd collecting audit events"
 
 section "KWin latency"
 kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy ExtremelyLow

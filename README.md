@@ -54,7 +54,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── tmp-mount-override.conf # /etc/systemd/system/tmp.mount.d/ — drop tmpfs usrquota
 │   ├── k10temp.conf            # /etc/modules-load.d/ — CPU temp sensor
 │   ├── scx_loader.toml         # /etc/scx_loader/ — scx_lavd Gaming mode
-│   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — DNSSEC, opportunistic DoT
+│   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — DNSSEC, DoT, LLMNR/mDNS off
 │   ├── tuned-ppd.conf          # /etc/tuned/ppd.conf — PPD → tuned profile map
 │   ├── macros.image-language-conf # /etc/rpm/ — limit langpacks to en_US
 │   ├── ntsync.conf             # /etc/modules-load.d/ — load ntsync at boot
@@ -236,13 +236,13 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ### 9. Kernel Parameters
 
 ```bash
-sudo grubby --update-kernel=ALL --args="nowatchdog audit=0 skew_tick=1 workqueue.power_efficient=false"
+sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue.power_efficient=false"
 ```
 
 | Parameter | Purpose |
 | --- | --- |
 | `nowatchdog` | Disable watchdog timers — reduces interrupts |
-| `audit=0` | Disable audit framework — marginal overhead reduction (RHEL latency guide) |
+| `audit=1` | Enable the audit framework so `auditd` can collect events. The RHEL latency guide suggests `audit=0`, but the overhead is ~1-3% on syscall-heavy work and unmeasurable in GPU-bound games — not worth losing security logging. `auditd.service` has `ConditionKernelCommandLine=!audit=0`, so with `audit=0` it silently refuses to start even when enabled |
 | `skew_tick=1` | Skew timer ticks across cores — reduces lock contention |
 | `workqueue.power_efficient=false` | Disable power-efficient workqueues — prevents cross-core cache misses |
 
@@ -267,11 +267,13 @@ sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-port=1025-65535/
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=mdns
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=ssh
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=samba-client
+sudo firewall-cmd --permanent --zone=FedoraWorkstation --remove-service=kdeconnect
 sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=dhcpv6-client
-sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=kdeconnect
 sudo firewall-cmd --reload
-firewall-cmd --list-services  # Verify: dhcpv6-client kdeconnect
+firewall-cmd --list-services  # Verify: dhcpv6-client
 ```
+
+KDE Connect is out: `kdeconnectd` binds `0.0.0.0:1716` plus several random UDP ports, so an unpaired daemon is pure LAN attack surface. Add the service back (and unmask the autostart unit) if you actually pair a phone.
 
 ### 12. Dual-Boot (Clock + Sleep/Hibernate)
 
@@ -322,6 +324,21 @@ To restore, boot from a live USB, mount the BTRFS partition, and use `btrfs subv
 ```bash
 # System services
 sudo systemctl disable --now ModemManager avahi-daemon pcscd
+
+# Unused services that hold listening sockets (Lynis: cups/gssproxy are UNSAFE-rated)
+sudo systemctl disable --now cups.service cups.socket cups.path   # no printer
+sudo systemctl disable --now gssproxy.service                     # no NFS mounts
+
+# KDE Connect binds 0.0.0.0:1716 plus random UDP ports — pure LAN attack surface
+# when no phone is paired. Masking autostart is not enough: Plasma re-activates
+# the daemon over D-Bus, so shadow the service file too.
+printf '[Desktop Entry]\nType=Application\nName=KDE Connect\nHidden=true\n' \
+  > ~/.config/autostart/org.kde.kdeconnect.daemon.desktop
+systemctl --user mask app-org.kde.kdeconnect.daemon@autostart.service
+mkdir -p ~/.local/share/dbus-1/services
+printf '[D-BUS Service]\nName=org.kde.kdeconnect\nExec=/bin/true\n' \
+  > ~/.local/share/dbus-1/services/org.kde.kdeconnect.service
+pkill -x kdeconnectd
 
 # Baloo file indexer (major CPU offender)
 balooctl6 disable
@@ -391,9 +408,22 @@ sudo dnf install -y lynis aide rkhunter
 | `lynis` | Whole-system audit: `sudo lynis audit system` |
 | `aide` | File integrity: `sudo aide --init` for a baseline, `sudo aide --check` after |
 | `rkhunter` | Rootkit scan: `sudo rkhunter --check` |
-| `audit` | Installed but disabled on purpose — the kernel boots with `audit=0` (see Kernel Parameters) |
+| `auditd` | Collects the kernel audit events (`audit=1`, see Kernel Parameters): `sudo ausearch -m avc -ts today`, `sudo aureport --summary` |
 
 AIDE flags every package update as a change; refresh the baseline with `sudo aide --update`.
+
+### Lynis findings deliberately not applied
+
+`sudo lynis audit system` scores ~76 on this box. These suggestions are wrong for this hardware and must not be "fixed":
+
+| Suggestion | Why it's rejected |
+|---|---|
+| `net.ipv4.conf.all.rp_filter=1` | Strict reverse-path filtering breaks Tailscale and Mullvad routing. Fedora ships `2` (loose) for exactly this reason |
+| `kernel.modules_disabled=1` | Blocks all module loading — kills NVIDIA, USB and hotplug |
+| `vm.swappiness` too high | `180` is deliberate for ZRAM; Lynis assumes disk swap |
+| Disable USB storage | The external SSD holds the ROM library |
+| `kernel.unprivileged_bpf_disabled=1` | Already set to `2`, which is stricter — Lynis only checks for equality |
+| Legal banners, password aging, separate `/var` | Single-user desktop with no SSH daemon |
 
 ### Malware scanning
 
