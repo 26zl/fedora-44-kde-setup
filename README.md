@@ -413,7 +413,14 @@ Lynis suggestions that must not be applied here: `rp_filter=1` (breaks Tailscale
 
 ### Malware scanning
 
-`clamav` + `clamd`. Update signatures with `sudo freshclam`, scan with `clamscan -r <path>`.
+```bash
+sudo dnf install -y clamav clamd clamav-freshclam
+sudo systemctl enable --now clamav-freshclam-once.timer
+```
+
+The timer is not enabled by the package, so without it the signature database silently goes stale — it ships once at install time and never updates. It runs daily with `Persistent=true`, so a missed run is caught up at next boot.
+
+On-access scanning (`clamd@scan`, `clamav-clamonacc`) stays off — it costs throughput on every file read. Scan on demand with `clamscan -r <path>`, and pass `--tempdir` when scanning large archives so decompression does not fill `/tmp`.
 
 ### Sandboxing and mandatory access control
 
