@@ -204,11 +204,11 @@ ok "auditd collecting audit events"
 
 section "KWin latency"
 kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy ExtremelyLow
-kwriteconfig6 --file kwinrc --group Compositing --key MaxFPS 165
+kwriteconfig6 --file kwinrc --group Compositing --key MaxFPS 170
 kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true
 # KWin's gamepad->keyboard desktop navigation hijacks controllers in games/emulators
 kwriteconfig6 --file kwinrc --group Plugins --key gamecontrollerEnabled false
-ok "KWin: ExtremelyLow latency, 165Hz max, blur enabled, gamepad-nav disabled"
+ok "KWin: ExtremelyLow latency, blur enabled, gamepad-nav disabled"
 
 section "KDE annoyances"
 # zoom (Meta+=) and shake-to-find cursor both fire by accident

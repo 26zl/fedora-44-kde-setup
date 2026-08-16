@@ -47,8 +47,10 @@ if [ "$1" = "post" ]; then
     DBUS="unix:path=/run/user/${USER_ID}/bus"
     WAYLAND="wayland-0"
 
+    # enabling an output that is not plugged in is a no-op, so listing every
+    # port that has ever been used keeps this correct across monitor changes
     su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} WAYLAND_DISPLAY=${WAYLAND} /usr/bin/kscreen-doctor \
-        output.DP-1.enable output.DP-3.enable" "$ACTIVE_USER" 2>/dev/null || true
+        output.DP-1.enable output.DP-3.enable output.DP-4.enable" "$ACTIVE_USER" 2>/dev/null || true
 
     sleep 1
     su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} dbus-send \

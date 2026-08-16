@@ -653,7 +653,7 @@ sudo dnf install -y gamescope
 sudo setcap cap_sys_nice+ep "$(which gamescope)"
 ```
 
-`CAP_SYS_NICE` lets Gamescope use `--rt` (real-time scheduling) without root. Steam launch option example: `gamescope -W 2560 -H 1440 -r 165 --hdr-enabled -- %command%`
+`CAP_SYS_NICE` lets Gamescope use `--rt` (real-time scheduling) without root. Steam launch option example, matched to the current display (3440x1440@170): `gamescope -W 3440 -H 1440 -r 170 --hdr-enabled -- %command%`
 
 ### GameMode + MangoHud
 
@@ -697,6 +697,8 @@ Append `gamemoderun mangohud` after the env vars to keep GameMode and the overla
 On Proton 9+/GE-Proton 10.x, NVAPI is on by default, so `PROTON_ENABLE_NVAPI` is mostly a no-op. To force DLSS 4 DLLs on RTX 50-series, use GE-Proton with `PROTON_DLSS_UPGRADE=1 %command%`.
 
 ### Display & competitive
+
+Current display: ultrawide **3440x1440@170Hz** on DP-4 (NVIDIA). Verify the compositor actually runs at panel rate with `qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.supportInformation | grep 'Refresh Rate'` — `MaxFPS` in `kwinrc` is an X11 leftover and does not limit Wayland.
 
 - **VRR**: System Settings → Display & Monitor → Adaptive Sync → `Automatic`. Driver 555.58+ gives Wayland explicit sync (no NVIDIA flicker). Good for desktop and single-player; leave it off for competitive CS2 (adds ~1-3 ms once FPS is well above refresh).
 - **HDR**: use KWin's native HDR per-display. Avoid gamescope HDR on Plasma 6.5 with NVIDIA — known washed/grey regression. Keep HDR off for CS2 (it's SDR).
