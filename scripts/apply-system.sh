@@ -32,8 +32,8 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ok "99-tweaks.conf, 99-disable-modules.conf, dnf.conf, zram-generator.conf, hugepages.conf"
 
 section "Kernel parameters"
-sudo grubby --update-kernel=ALL --remove-args="nowatchdog audit=0 audit=1 skew_tick=1 workqueue.power_efficient=false" 2>/dev/null || true
-sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue.power_efficient=false"
+sudo grubby --update-kernel=ALL --remove-args="nowatchdog audit=0 audit=1 skew_tick=1 workqueue.power_efficient=false preempt=full" 2>/dev/null || true
+sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue.power_efficient=false preempt=full"
 ok "Kernel parameters set (takes effect on next boot)"
 
 section "SCX scheduler"

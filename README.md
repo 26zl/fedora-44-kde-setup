@@ -192,7 +192,14 @@ sudo systemctl enable --now scx_loader.service
 sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 ```
 
-`scx_lavd` in Gaming mode gives significantly better frame pacing and latency for games.
+`scx_lavd` in Gaming mode gives better frame pacing and latency for games.
+
+> **Currently broken on Fedora's kernel 7.1.x.** The scheduler fails to load with
+> `the running kernel's BTF has malformed scx kfunc prototype(s)` — since Linux 7.0,
+> `KF_IMPLICIT_ARGS` kfuncs need pahole >= 1.26 at kernel build time, and Fedora's builds
+> use an older one. Every 7.1.x build is affected, so booting an older kernel does not help.
+> Verify with `cat /sys/kernel/sched_ext/state` — `disabled` means EEVDF is running instead.
+> Nothing to fix locally; the config stays in place and starts working once Fedora rebuilds.
 
 ### 7. ZRAM
 
@@ -236,7 +243,7 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ### 9. Kernel Parameters
 
 ```bash
-sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue.power_efficient=false"
+sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue.power_efficient=false preempt=full"
 ```
 
 | Parameter | Purpose |
@@ -245,6 +252,7 @@ sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue
 | `audit=1` | Enable the audit framework — `auditd.service` has `ConditionKernelCommandLine=!audit=0` and will not start without it |
 | `skew_tick=1` | Skew timer ticks across cores — reduces lock contention |
 | `workqueue.power_efficient=false` | Disable power-efficient workqueues — prevents cross-core cache misses |
+| `preempt=full` | Full kernel preemption. Fedora builds `PREEMPT_DYNAMIC` and boots `lazy` by default; `full` trades a little throughput for lower worst-case latency. Check the active model with `cat /sys/kernel/debug/sched/preempt` |
 
 Takes effect on next boot. Verify with `cat /proc/cmdline`.
 
