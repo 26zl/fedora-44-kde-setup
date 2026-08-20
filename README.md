@@ -243,13 +243,14 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ### 9. Kernel Parameters
 
 ```bash
-sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 skew_tick=1 workqueue.power_efficient=false preempt=full"
+sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 audit_backlog_limit=8192 skew_tick=1 workqueue.power_efficient=false preempt=full"
 ```
 
 | Parameter | Purpose |
 | --- | --- |
 | `nowatchdog` | Disable watchdog timers — reduces interrupts |
 | `audit=1` | Enable the audit framework — `auditd.service` has `ConditionKernelCommandLine=!audit=0` and will not start without it |
+| `audit_backlog_limit=8192` | The kernel default is 64, which overflows during boot once `audit=1` is set (`kauditd hold queue overflow` in dmesg) and silently drops audit events |
 | `skew_tick=1` | Skew timer ticks across cores — reduces lock contention |
 | `workqueue.power_efficient=false` | Disable power-efficient workqueues — prevents cross-core cache misses |
 | `preempt=full` | Full kernel preemption. Fedora builds `PREEMPT_DYNAMIC` and boots `lazy` by default; `full` trades a little throughput for lower worst-case latency. Check the active model with `cat /sys/kernel/debug/sched/preempt` |
@@ -349,19 +350,24 @@ sudo dnf remove -y kde-connect
 balooctl6 disable
 kwriteconfig6 --file baloofilerc --group "Basic Settings" --key "Indexing-Enabled" false
 
-# KDE user services
-systemctl --user disable --now \
+# KDE user services. These are generated from XDG autostart files and have no
+# [Install] section, so `disable` silently does nothing — they must be masked.
+# Verify with `systemctl --user is-enabled <unit>`: "generated" means still active.
+systemctl --user mask --now \
   app-org.kde.discover.notifier@autostart.service \
   app-org.kde.kalendarac@autostart.service \
   app-sealertauto@autostart.service \
-  app-org.freedesktop.problems.applet@autostart.service
+  app-org.freedesktop.problems.applet@autostart.service \
+  app-vboxclient@autostart.service
 
 # Akonadi (KDE PIM — only needed if using KMail/Kontact). It pulls in ~16 processes
-# and its own MariaDB. The unit has no [Install] section, so `disable` fails — mask it.
+# and its own MariaDB. Same reason: mask, not disable.
 systemctl --user mask --now akonadi_control.service
 ```
 
-Undo with `systemctl --user unmask akonadi_control.service`.
+Undo any of these with `systemctl --user unmask <unit>`.
+
+`kalendarac` is the one that matters: with Akonadi masked it starts, fails to reach it, and dies with `malloc(): unaligned tcache chunk detected` — several hundred stack-trace lines in `journalctl -b -p err` every boot. `app-vboxclient` comes from `virtualbox-guest-additions`, which belongs inside a VM, not on the host.
 
 ### 15. libinput Debouncing
 
