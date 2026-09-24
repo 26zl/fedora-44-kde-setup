@@ -194,12 +194,13 @@ sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 
 `scx_lavd` in Gaming mode gives better frame pacing and latency for games.
 
-> **Currently broken on Fedora's kernel 7.1.x.** The scheduler fails to load with
-> `the running kernel's BTF has malformed scx kfunc prototype(s)` — since Linux 7.0,
-> `KF_IMPLICIT_ARGS` kfuncs need pahole >= 1.26 at kernel build time, and Fedora's builds
-> use an older one. Every 7.1.x build is affected, so booting an older kernel does not help.
+> **Broken on Fedora kernels 7.1.x–7.2.6.** The scheduler fails to load with
+> `the running kernel's BTF has malformed scx kfunc prototype(s)` — `KF_IMPLICIT_ARGS`
+> kfuncs only get a loadable BTF prototype from a new enough pahole at kernel build time,
+> and those builds used pahole 1.30 or older. `grep CONFIG_PAHOLE_VERSION /boot/config-*`
+> shows which pahole built each installed kernel; 7.2.7-200 was built with 1.32. Same failure:
+> [CachyOS COPR #113](https://github.com/CachyOS/copr-linux-cachyos/issues/113).
 > Verify with `cat /sys/kernel/sched_ext/state` — `disabled` means EEVDF is running instead.
-> Nothing to fix locally; the config stays in place and starts working once Fedora rebuilds.
 
 ### 7. ZRAM
 
