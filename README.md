@@ -425,6 +425,18 @@ AIDE flags every package update as a change; refresh the baseline with `sudo aid
 
 Lynis suggestions that must not be applied here: `rp_filter=1` (breaks Tailscale and VPN routing), `kernel.modules_disabled=1` (blocks NVIDIA and USB), lower `vm.swappiness` (180 is set for ZRAM), disabling USB storage.
 
+`kernel-hardening-checker` is not packaged for Fedora. It is stdlib-only Python, so run it from a pinned tag:
+
+```bash
+git clone --depth 1 --branch v0.6.17.1 https://github.com/a13xp0p0v/kernel-hardening-checker /tmp/khc
+sudo sysctl -a > /tmp/sysctl.txt
+python3 /tmp/khc/bin/kernel-hardening-checker -c /boot/config-$(uname -r) -l /proc/cmdline -s /tmp/sysctl.txt -m show_fail
+```
+
+Most failures are expected. The kconfig checks describe Fedora's kernel build — fixing them means a self-built kernel, which breaks Secure Boot. The per-vulnerability mitigation checks only accept `mitigations=auto,nosmt`; the default `auto` is mitigated, which `deep-health.sh` confirms from sysfs. The zero-cost findings are in `99-tweaks.conf` (`kernel.unprivileged_bpf_disabled=1`, `kernel.oops_limit=100`, `vm.mmap_rnd_bits=32`). Findings that must not be applied here: `nosmt` (halves the threads), `ia32_emulation=0` (Steam and 32-bit games), `user.max_user_namespaces=0` (Flatpak, Steam pressure-vessel, browser sandboxes), `lockdown=confidentiality` and `kernel.kptr_restrict=2` (perf and bpftrace), `kernel.yama.ptrace_scope=3` (gdb, strace), `vm.mmap_rnd_compat_bits=16` (32-bit games lose contiguous address space), `kernel.warn_limit` (a driver's WARN splats would panic the box), `pti=on` and `intel_iommu=on` (Intel-only).
+
+[dev-sec/ansible-collection-hardening](https://github.com/dev-sec/ansible-collection-hardening) and [dev-sec/linux-baseline](https://github.com/dev-sec/linux-baseline) are not used. They are server baselines: the defaults (`rp_filter=1`, `net.ipv4.ip_forward=0`, `kernel.kptr_restrict=2`, `kernel.sysrq=0`, a templated `auditd.conf`) break Mullvad, Tailscale, Docker and bpftrace here, and linux-baseline needs an InSpec runtime to check what lynis already covers.
+
 ### Malware scanning
 
 ```bash
@@ -524,6 +536,8 @@ make -C /tmp/ble.sh install PREFIX=~/.local
 ```
 
 `configs/bashrc` holds the bashrc additions (aliases, zoxide, mise, starship). `fedora-setup.sh` handles the deploy: it prepends the ble.sh `--noattach` loader to line 1, then appends `configs/bashrc` itself followed by the `ble-attach` line — ble.sh requires `--noattach` first and `ble-attach` last.
+
+[Bash-it](https://github.com/Bash-it/bash-it) is not used: ble.sh, Starship and `configs/bashrc` already cover it, and Kitty runs fish, not bash.
 
 ### mise (Runtime Version Manager)
 
@@ -907,6 +921,12 @@ pgrep conky && echo "Conky running"
 | Linux Gaming Optimization | [github.com/theyareonit/linux-gaming-optimization](https://github.com/theyareonit/linux-gaming-optimization) |
 | Linux Gaming Guide (AdelKS) | [github.com/AdelKS/LinuxGamingGuide](https://github.com/AdelKS/LinuxGamingGuide) |
 | Linux Gaming Wiki | [linux-gaming.kwindu.eu](https://linux-gaming.kwindu.eu/) |
+
+### Security
+
+| Tool | Source |
+| --- | --- |
+| kernel-hardening-checker | [github.com/a13xp0p0v/kernel-hardening-checker](https://github.com/a13xp0p0v/kernel-hardening-checker) |
 
 ### References
 
