@@ -26,8 +26,11 @@ set -gx GIT_PAGER delta
 # lazygit
 alias lg='lazygit'
 
-# Gamescope — 2560x1440 @ 165Hz, RT scheduling, async flips, MangoApp overlay
-alias gcs2='gamescope -W 2560 -H 1440 -r 165 --rt --immediate-flips --mangoapp -e --'
+# Gamescope at the primary monitor's current mode, RT scheduling, async flips, MangoApp overlay
+function gcs2
+    set -l mode (kscreen-doctor -j | jq -r '.outputs[] | select(.priority == 1) | .currentModeId as $m | .modes[] | select(.id == $m) | "\(.size.width) \(.size.height) \(.refreshRate | round)"' | string split ' ')
+    gamescope -W $mode[1] -H $mode[2] -r $mode[3] --rt --immediate-flips --mangoapp -e -- $argv
+end
 
 # scripts
 alias rice="$HOME/scripts/rice-start.sh"

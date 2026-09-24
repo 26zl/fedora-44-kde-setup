@@ -40,7 +40,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── starship/starship.toml  # Shell prompt
 │   ├── wireplumber/
 │   │   └── wireplumber.conf.d/
-│   │       └── 50-audio.conf   # Disable unused ALSA nodes, NVIDIA HDMI pro-audio
+│   │       └── 50-audio.conf   # Disable onboard, iGPU HDMI and webcam audio
 │   ├── systemd/
 │   │   └── conky.service       # ~/.config/systemd/user/ — Conky autostart service
 │   └── bashrc                  # ~/.bashrc additions (ble.sh, zoxide, aliases)
@@ -911,6 +911,7 @@ pgrep conky && echo "Conky running"
 ### References
 
 - [Fedora Documentation](https://docs.fedoraproject.org/)
+- [WirePlumber ALSA configuration](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/alsa.html) — `monitor.alsa.rules` and `device.disabled`, used by `50-audio.conf`
 - [Arch Wiki](https://wiki.archlinux.org/) — good reference even on Fedora
 - [r/Fedora](https://www.reddit.com/r/Fedora/)
 - [r/unixporn](https://www.reddit.com/r/unixporn/)

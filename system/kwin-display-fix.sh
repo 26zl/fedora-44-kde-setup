@@ -13,6 +13,21 @@ find_dev() {
     done
 }
 
+# run a command as the user of the active Wayland session
+in_session() {
+    local s uid sock
+    for s in $(loginctl list-sessions --no-legend | awk '{print $1}'); do
+        [ "$(loginctl show-session "$s" -p Type --value)" = wayland ] || continue
+        [ "$(loginctl show-session "$s" -p Active --value)" = yes ] || continue
+        uid=$(loginctl show-session "$s" -p User --value)
+        sock=$(find "/run/user/$uid" -maxdepth 1 -type s -name 'wayland-*' -printf '%f\n' -quit)
+        runuser -u "$(id -nu "$uid")" -- env XDG_RUNTIME_DIR="/run/user/$uid" WAYLAND_DISPLAY="$sock" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" timeout 10 "$@"
+        return
+    done
+    return 1
+}
+
 if [ "$1" = "pre" ]; then
     for vid_pid in $AUTOSUSPEND_DEVS; do
         dev=$(find_dev "$vid_pid")
@@ -42,18 +57,14 @@ if [ "$1" = "post" ]; then
     done
 
     sleep 4
-    ACTIVE_USER=$(loginctl list-sessions --no-legend | awk '{print $3}' | head -1)
-    USER_ID=$(id -u "$ACTIVE_USER" 2>/dev/null || echo 1000)
-    DBUS="unix:path=/run/user/${USER_ID}/bus"
-    WAYLAND="wayland-0"
-
-    # enabling an output that is not plugged in is a no-op, so listing every
-    # port that has ever been used keeps this correct across monitor changes
-    su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} WAYLAND_DISPLAY=${WAYLAND} /usr/bin/kscreen-doctor \
-        output.DP-1.enable output.DP-3.enable output.DP-4.enable" "$ACTIVE_USER" 2>/dev/null || true
+    # amdgpu drops the USB-C monitor while re-training its DP link on resume
+    mapfile -t enable < <(in_session kscreen-doctor -j 2>/dev/null |
+        jq -r '.outputs[] | select(.connected) | "output.\(.name).enable"')
+    if [ ${#enable[@]} -gt 0 ]; then
+        in_session kscreen-doctor "${enable[@]}" >/dev/null 2>&1 || true
+    fi
 
     sleep 1
-    su -c "DBUS_SESSION_BUS_ADDRESS=${DBUS} dbus-send \
-        --session --dest=org.kde.KWin \
-        --type=method_call /KWin org.kde.KWin.reconfigure" "$ACTIVE_USER" 2>/dev/null || true
+    in_session dbus-send --session --dest=org.kde.KWin \
+        --type=method_call /KWin org.kde.KWin.reconfigure >/dev/null 2>&1 || true
 fi

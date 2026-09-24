@@ -31,7 +31,8 @@ CPU_LOAD=$(awk -v busy=$(( (u2 + n2 + s2) - (u1 + n1 + s1) )) \
                'BEGIN {printf "%.1f", total ? busy * 100 / total : 0}')
 CPU_FREQ=$(grep 'cpu MHz' /proc/cpuinfo | awk '{sum+=$4; count++} END {printf "%.2f", sum/count/1000}')
 CPU_TEMP=$(sensors 2>/dev/null | grep 'Tctl:' | awk '{print $2}' | tr -d '+')
-echo -e "  ${TEAL}CPU  ${GRAY}Ryzen 9 9900X${RESET}"
+CPU_NAME=$(grep -m1 'model name' /proc/cpuinfo | sed 's/.*: //; s/^AMD //; s/ [0-9]*-Core Processor *$//')
+echo -e "  ${TEAL}CPU  ${GRAY}${CPU_NAME}${RESET}"
 echo -e "  ${GRAY}load   ${WHITE}${CPU_LOAD}%  ${GRAY}freq  ${WHITE}${CPU_FREQ}GHz  ${GRAY}temp  ${WHITE}${CPU_TEMP:-N/A}${RESET}"
 
 line
@@ -42,7 +43,8 @@ if command -v nvidia-smi &>/dev/null; then
     GPU_LOAD=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader | tr -d ' ')
     GPU_VRAM_USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader | tr -d ' ')
     GPU_VRAM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader | tr -d ' ')
-    echo -e "  ${TEAL}GPU  ${GRAY}RTX 5070${RESET}"
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | sed 's/^NVIDIA GeForce //')
+    echo -e "  ${TEAL}GPU  ${GRAY}${GPU_NAME}${RESET}"
     echo -e "  ${GRAY}temp   ${WHITE}${GPU_TEMP}°C  ${GRAY}load  ${WHITE}${GPU_LOAD}  ${GRAY}vram  ${WHITE}${GPU_VRAM_USED} / ${GPU_VRAM_TOTAL}${RESET}"
 fi
 
@@ -72,8 +74,9 @@ echo -e "  ${GRAY}root   ${WHITE}${ROOT_USED} / ${ROOT_TOTAL} ${GRAY}(${ROOT_PCT
 
 line
 
-# Network — adjust interface name to match your system (check with: ip link show)
-IP=$(ip -4 addr show enp14s0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+# Network — interface of the default route
+IFACE=$(ip route show default | grep -oP 'dev \K\S+' | head -1)
+IP=$(ip -4 addr show dev "$IFACE" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 echo -e "  ${TEAL}NETWORK${RESET}"
 echo -e "  ${GRAY}ip     ${WHITE}${IP:-No address}${RESET}"
 

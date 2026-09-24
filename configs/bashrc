@@ -38,8 +38,12 @@ ya() {
 # mise — runtime version manager
 eval "$(~/.local/bin/mise activate bash 2>/dev/null)" || true
 
-# Gamescope — 2560x1440 @ 165Hz, RT scheduling, async flips, MangoApp overlay
-alias gcs2='gamescope -W 2560 -H 1440 -r 165 --rt --immediate-flips --mangoapp -e --'
+# Gamescope at the primary monitor's current mode, RT scheduling, async flips, MangoApp overlay
+gcs2() {
+  local w h r
+  read -r w h r < <(kscreen-doctor -j | jq -r '.outputs[] | select(.priority == 1) | .currentModeId as $m | .modes[] | select(.id == $m) | "\(.size.width) \(.size.height) \(.refreshRate | round)"')
+  gamescope -W "$w" -H "$h" -r "$r" --rt --immediate-flips --mangoapp -e -- "$@"
+}
 
 # scripts
 alias rice="$HOME/scripts/rice-start.sh"

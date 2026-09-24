@@ -210,7 +210,6 @@ ok "auditd collecting audit events"
 
 section "KWin latency"
 kwriteconfig6 --file kwinrc --group Compositing --key LatencyPolicy ExtremelyLow
-kwriteconfig6 --file kwinrc --group Compositing --key MaxFPS 170
 kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true
 # KWin's gamepad->keyboard desktop navigation hijacks controllers in games/emulators
 kwriteconfig6 --file kwinrc --group Plugins --key gamecontrollerEnabled false
@@ -260,7 +259,7 @@ mkdir -p ~/.config/wireplumber/wireplumber.conf.d
 cp configs/wireplumber/wireplumber.conf.d/50-audio.conf \
     ~/.config/wireplumber/wireplumber.conf.d/50-audio.conf
 systemctl --user restart wireplumber
-ok "WirePlumber: unused audio devices disabled, NVIDIA HDMI pro-audio configured"
+ok "WirePlumber: onboard, iGPU HDMI and webcam audio disabled"
 
 section "Writing user configs"
 mkdir -p ~/.config/kitty ~/.config/conky \
