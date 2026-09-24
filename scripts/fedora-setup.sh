@@ -146,7 +146,7 @@ ok "System files deployed via apply-system.sh"
 section "SCX scheduler (gaming)"
 sudo systemctl enable --now scx_loader.service
 # scx_lavd fails to load on kernels whose BTF came from pahole <= 1.30 (Fedora
-# 7.1.x-7.2.6); check CONFIG_PAHOLE_VERSION in /boot/config-*. Config stays.
+# 7.1.x-7.2.6, fixed in 7.2.7); check CONFIG_PAHOLE_VERSION in /boot/config-*.
 if [[ "$(cat /sys/kernel/sched_ext/state 2>/dev/null)" == "enabled" ]]; then
     ok "scx_lavd Gaming mode active"
 else

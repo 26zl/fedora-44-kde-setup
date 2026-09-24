@@ -194,13 +194,15 @@ sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 
 `scx_lavd` in Gaming mode gives better frame pacing and latency for games.
 
-> **Broken on Fedora kernels 7.1.x–7.2.6.** The scheduler fails to load with
+> **Loads from kernel 7.2.7-200 on; broken on Fedora 7.1.x–7.2.6.** Those builds fail with
 > `the running kernel's BTF has malformed scx kfunc prototype(s)` — `KF_IMPLICIT_ARGS`
 > kfuncs only get a loadable BTF prototype from a new enough pahole at kernel build time,
-> and those builds used pahole 1.30 or older. `grep CONFIG_PAHOLE_VERSION /boot/config-*`
-> shows which pahole built each installed kernel; 7.2.7-200 was built with 1.32. Same failure:
-> [CachyOS COPR #113](https://github.com/CachyOS/copr-linux-cachyos/issues/113).
+> and they used pahole 1.30 or older; 7.2.7-200 was built with 1.32.
+> `grep CONFIG_PAHOLE_VERSION /boot/config-*` shows which pahole built each installed kernel.
+> Same failure: [CachyOS COPR #113](https://github.com/CachyOS/copr-linux-cachyos/issues/113).
 > Verify with `cat /sys/kernel/sched_ext/state` — `disabled` means EEVDF is running instead.
+> The kernel's watchdog can eject lavd on a `runnable task stall`; `scx_loader` restarts it
+> (`journalctl -k | grep 'runnable task stall'`).
 
 ### 7. ZRAM
 
