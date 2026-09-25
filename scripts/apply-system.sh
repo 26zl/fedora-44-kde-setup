@@ -61,8 +61,11 @@ ok "kwin-display-fix.sh, usb-autosuspend.service"
 
 section "DNS hardening"
 sudo mkdir -p /etc/systemd/resolved.conf.d
-sudo cp system/resolved-hardening.conf /etc/systemd/resolved.conf.d/hardening.conf
-sudo systemctl restart systemd-resolved
+# a restart drops the per-link DNS a VPN or Tailscale set, so only restart on change
+if ! cmp -s system/resolved-hardening.conf /etc/systemd/resolved.conf.d/hardening.conf; then
+    sudo cp system/resolved-hardening.conf /etc/systemd/resolved.conf.d/hardening.conf
+    sudo systemctl restart systemd-resolved
+fi
 ok "resolved-hardening.conf (Quad9, DNSSEC, DoT)"
 
 section "plasmalogin restart fix"
