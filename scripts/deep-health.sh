@@ -1,8 +1,6 @@
 #!/bin/bash
-# Deep hardware audit — firmware, CPU, memory, thermals, disk, filesystems, GPU.
-# sysinfo.sh is the glance; this is the full check after a BIOS flash or when
-# something feels wrong at boot. Runs a btrfs scrub and an NVMe self-test, so
-# it takes around six minutes. Read-only: nothing is changed.
+# Full hardware audit (~6 min: btrfs scrub + NVMe self-test); sysinfo.sh is the quick glance.
+# Changes nothing except what the scrub repairs from btrfs' duplicate metadata.
 
 set -e
 

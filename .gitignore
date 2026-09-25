@@ -1,10 +1,9 @@
-# ── macOS ────────────────────────────────────────────────────────────────────
+# macOS
 .DS_Store
 **/.DS_Store
 .AppleDouble
 .LSOverride
 .localized
-Icon$'\r'
 ._*
 .Spotlight-V100
 .Trashes
@@ -12,7 +11,7 @@ Icon$'\r'
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 
-# ── Windows ──────────────────────────────────────────────────────────────────
+# Windows
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
@@ -22,18 +21,18 @@ $RECYCLE.BIN/
 *.lnk
 *.stackdump
 
-# ── Linux ────────────────────────────────────────────────────────────────────
+# Linux
 *~
 .Trash-*/
 .nfs*
 
-# ── Editors ──────────────────────────────────────────────────────────────────
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# ── Temp / logs ──────────────────────────────────────────────────────────────
+# Temp / logs
 *.log
 *.tmp
 *.temp
@@ -43,15 +42,15 @@ $RECYCLE.BIN/
 *.orig
 *.pid
 
-# ── Build artifacts ──────────────────────────────────────────────────────────
+# Build artifacts
 *.o
 *.obj
 *.elf
 
-# ── Claude Code ──────────────────────────────────────────────────────────────
+# Claude Code
 CLAUDE.md
 .claude/
 
-# ── Dependencies ─────────────────────────────────────────────────────────────
+# Dependencies
 node_modules/
 vendor/

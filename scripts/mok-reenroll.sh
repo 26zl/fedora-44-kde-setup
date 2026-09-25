@@ -1,10 +1,6 @@
 #!/bin/bash
-# Re-enroll the akmods signing key after a BIOS flash.
-#
-# Flashing the BIOS clears UEFI NVRAM, and the MOK list goes with it. The locally
-# signed NVIDIA modules then fail signature verification under Secure Boot, nouveau
-# claims the card instead, and Plasma comes up to a black screen. Everything still
-# boots — you land in a TTY — so run this from there.
+# Re-enroll the akmods signing key after a BIOS flash cleared the MOK list, which
+# leaves the NVIDIA modules unloadable under Secure Boot; run it from the TTY.
 
 set -e
 
