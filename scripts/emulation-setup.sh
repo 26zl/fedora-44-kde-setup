@@ -17,6 +17,8 @@ sudo dnf install -y \
     --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
     --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' \
     terra-release
+# Terra also ships steam, scx-scheds, lact and more; take only ES-DE from it
+sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,emulationstation-de*'
 sudo dnf install -y emulationstation-de
 ok "ES-DE installed"
 

@@ -40,7 +40,7 @@ alias sysinfo="$HOME/scripts/sysinfo.sh"
 zoxide init fish | source
 
 # mise — runtime version manager
-~/.local/bin/mise activate fish 2>/dev/null | source
+command -q mise; and mise activate fish | source
 
 # Starship prompt
 starship init fish | source

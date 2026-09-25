@@ -19,15 +19,16 @@ sudo cp system/dnf.conf /etc/dnf/dnf.conf
 ok "DNF configured (max 2 kernels, parallel downloads)"
 
 section "Locale debloat"
+# keep a langpack for every locale in use (e.g. nb_NO formats), not only English
+langs=$(locale | sed -n 's/^[A-Z_]*="\{0,1\}\([a-z]\{2,3\}\)_.*/\1/p' | sort -u)
 if rpm -q glibc-all-langpacks &>/dev/null; then
     sudo dnf swap -y glibc-all-langpacks glibc-langpack-en
-    ok "glibc-all-langpacks replaced with glibc-langpack-en"
-else
-    ok "glibc-langpack-en already in place"
 fi
+for l in $langs; do
+    sudo dnf install -y "glibc-langpack-$l"
+done
 sudo cp system/macros.image-language-conf /etc/rpm/macros.image-language-conf
-sudo find /usr/share/locale -maxdepth 1 -mindepth 1 -type d ! -name 'en*' ! -name 'C' ! -name 'POSIX' -exec rm -rf {} +
-ok "Non-English locales removed, langpack macro set"
+ok "langpacks: $(echo "$langs" | xargs); new packages install English translations only"
 
 section "RPM Fusion"
 sudo dnf install -y \
@@ -36,8 +37,14 @@ sudo dnf install -y \
 sudo dnf group upgrade -y core
 ok "RPM Fusion free + nonfree installed"
 
+section "COPR repos"
+sudo dnf copr enable -y bieszczaders/kernel-cachyos-addons  # scx-scheds
+sudo dnf copr enable -y lihaohong/yazi
+sudo dnf copr enable -y jdxcode/mise
+ok "COPR: scx-scheds, yazi, mise"
+
 section "NVIDIA drivers"
-sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda nvidia-vaapi-driver
+sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver
 ok "NVIDIA akmod drivers installed"
 
 section "System tools"
@@ -46,6 +53,7 @@ sudo dnf install -y \
     gamemode \
     mangohud \
     gamescope \
+    libdnf5-plugin-actions \
     htop \
     btop \
     wl-clipboard \
@@ -64,52 +72,50 @@ sudo dnf install -y \
     kitty \
     fish \
     zoxide \
-    lazygit \
     fzf \
     ripgrep \
     fd-find \
     bat \
     eza \
     fastfetch \
-    git-delta
+    git-delta \
+    yazi \
+    mise
 
 # fish runs inside kitty (not as login shell — keeps KDE session stable)
 ok "fish installed (used as kitty shell, not login shell)"
 
-# Starship — not packaged in Fedora, use the official installer
+# Pinned upstream releases, checked against these hashes before anything is installed
+dl=$(mktemp -d)
+fetch() {  # url sha256 file
+    curl -fsSL "$1" -o "$3"
+    echo "$2  $3" | sha256sum -c --quiet -
+}
+
 if ! command -v starship &>/dev/null; then
-    curl -sS https://starship.rs/install.sh | sh -s -- -y
-    ok "Starship installed"
-else
-    ok "Starship already installed"
+    fetch https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz \
+        b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3 "$dl/starship.tar.gz"
+    tar -xzf "$dl/starship.tar.gz" -C "$dl" starship
+    sudo install -m755 "$dl/starship" /usr/local/bin/starship
 fi
+ok "Starship $(starship --version | head -1 | awk '{print $2}')"
 
-# mise
-if ! command -v mise &>/dev/null; then
-    curl https://mise.run | sh
-    ok "mise installed"
-else
-    ok "mise already installed"
+if ! command -v lazygit &>/dev/null; then
+    fetch https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_linux_x86_64.tar.gz \
+        02beacbcda0fa342e50ae3480ba8147307353af3fb28e1d5f790e02329c201a6 "$dl/lazygit.tar.gz"
+    tar -xzf "$dl/lazygit.tar.gz" -C "$dl" lazygit
+    sudo install -m755 "$dl/lazygit" /usr/local/bin/lazygit
 fi
+ok "lazygit $(lazygit --version | grep -oP 'version=\K[^,]+')"
 
-# Yazi — prebuilt binary; latest/download URL needs no GitHub API call
-if ! command -v yazi &>/dev/null; then
-    curl -fsSL "https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.zip" \
-        -o /tmp/yazi.zip
-    unzip -qo /tmp/yazi.zip -d /tmp/yazi-bin
-    sudo install -m755 /tmp/yazi-bin/yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/yazi
-    rm -rf /tmp/yazi.zip /tmp/yazi-bin
-    ok "Yazi installed"
-else
-    ok "Yazi already installed"
-fi
-
-# ble.sh — bash syntax highlighting
+# ble.sh — bash syntax highlighting; .gitmodules uses a relative URL, so origin must exist
 if [[ ! -f ~/.local/share/blesh/ble.sh ]]; then
-    git clone --recursive --depth 1 --shallow-submodules \
-        https://github.com/akinomyoga/ble.sh.git /tmp/ble.sh
-    make -C /tmp/ble.sh install PREFIX=~/.local
-    rm -rf /tmp/ble.sh
+    git init -q "$dl/ble.sh"
+    git -C "$dl/ble.sh" remote add origin https://github.com/akinomyoga/ble.sh.git
+    git -C "$dl/ble.sh" fetch -q --depth 1 origin d81fd54feb0d996fdff20dca27eaf0201f7015cc
+    git -C "$dl/ble.sh" checkout -q FETCH_HEAD
+    git -C "$dl/ble.sh" submodule update -q --init --recursive --depth 1
+    make -C "$dl/ble.sh" install PREFIX=~/.local
     ok "ble.sh installed"
 else
     ok "ble.sh already installed"
@@ -117,11 +123,12 @@ fi
 
 # JetBrainsMono Nerd Font
 mkdir -p ~/.local/share/fonts/JetBrainsMono
-curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
-    -o /tmp/JetBrainsMono.tar.xz
-tar -xf /tmp/JetBrainsMono.tar.xz -C ~/.local/share/fonts/JetBrainsMono/
+fetch https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/JetBrainsMono.tar.xz \
+    04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf "$dl/JetBrainsMono.tar.xz"
+tar -xf "$dl/JetBrainsMono.tar.xz" -C ~/.local/share/fonts/JetBrainsMono/
 fc-cache -fv -q
 ok "JetBrainsMono Nerd Font installed"
+rm -rf "$dl"
 
 section "Flatpak (gaming)"
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -194,9 +201,8 @@ sudo systemctl disable --now abrtd abrt-oops abrt-xorg abrt-journal-core 2>/dev/
 ok "ABRT disabled (reduces background CPU/RAM usage)"
 
 section "Disable unused listening services"
-# cups: no printer. gssproxy: no NFS — mask it, auth-rpcgss-module.service pulls
-# a merely-disabled unit back in. kde-connect: binds the LAN with nothing paired,
-# and masking it makes plasmashell block on D-Bus activation, so remove it.
+# gssproxy is masked because auth-rpcgss-module.service pulls a disabled unit back in;
+# kde-connect is removed because masking it makes plasmashell block on D-Bus activation.
 sudo systemctl disable --now cups.service cups.socket cups.path 2>/dev/null || true
 sudo systemctl mask --now gssproxy.service 2>/dev/null || true
 sudo dnf mark user fuse-sshfs openssh-askpass 2>/dev/null || true
@@ -280,8 +286,8 @@ cp configs/fish/functions/ya.fish ~/.config/fish/functions/ya.fish
 cp wallpaper/wallpaper.jpg ~/Pictures/wallpaper.jpg
 ok "User configs written"
 
-cp scripts/rice-start.sh scripts/sysinfo.sh ~/scripts/
-chmod +x ~/scripts/rice-start.sh ~/scripts/sysinfo.sh
+cp scripts/rice-start.sh scripts/sysinfo.sh scripts/deep-health.sh scripts/mok-reenroll.sh ~/scripts/
+chmod +x ~/scripts/{rice-start,sysinfo,deep-health,mok-reenroll}.sh
 ok "Scripts installed to ~/scripts/"
 
 # ble.sh requires --noattach first and ble-attach last; configs/bashrc goes in between

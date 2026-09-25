@@ -36,7 +36,7 @@ ya() {
 [ -x /home/linuxbrew/.linuxbrew/bin/brew ] && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"
 
 # mise — runtime version manager
-eval "$(~/.local/bin/mise activate bash 2>/dev/null)" || true
+command -v mise >/dev/null && eval "$(mise activate bash)"
 
 # Gamescope at the primary monitor's current mode, RT scheduling, async flips, MangoApp overlay
 gcs2() {

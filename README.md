@@ -52,8 +52,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── dnf.conf                # /etc/dnf/ — DNF settings
 │   ├── zram-generator.conf     # /etc/systemd/ — ZRAM 8GB
 │   ├── tmp-mount-override.conf # /etc/systemd/system/tmp.mount.d/ — drop tmpfs usrquota
-│   ├── k10temp.conf            # /etc/modules-load.d/ — CPU temp sensor
-│   ├── scx_loader.toml         # /etc/scx_loader/ — scx_lavd Gaming mode
+│   ├── scx_loader.toml         # /etc/scx_loader/ — scx_bpfland Gaming mode (lavd until #3791 ships)
 │   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — DNSSEC, DoT, LLMNR/mDNS off
 │   ├── tuned-ppd.conf          # /etc/tuned/ppd.conf — PPD → tuned profile map
 │   ├── macros.image-language-conf # /etc/rpm/ — limit langpacks to en_US
@@ -66,6 +65,7 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── hugepages.conf          # /etc/tmpfiles.d/ — transparent hugepages
 │   ├── kwin-display-fix.sh     # /usr/lib/systemd/system-sleep/ — KWin resume hook
 │   ├── usb-autosuspend.service # /etc/systemd/system/ — autosuspend xHCI-blocking USB devices
+│   ├── gamescope-caps.actions  # /etc/dnf/libdnf5-plugins/actions.d/ — re-grant CAP_SYS_NICE after gamescope updates
 │   ├── plasmalogin.conf        # /etc/plasmalogin.conf — login screen wallpaper
 │   └── plasmalogin-restart.conf # systemd drop-in — auto-restart plasmalogin on crash
 ├── scripts/
@@ -132,7 +132,7 @@ sudo dnf group upgrade -y core
 **Install drivers:**
 
 ```bash
-sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda nvidia-vaapi-driver
+sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver
 ```
 
 Wait ~5 minutes for akmods to build the kernel module, then:
@@ -187,12 +187,13 @@ The `tuned-ppd.conf` maps KDE's "Performance" power mode to `latency-performance
 ### 6. SCX Scheduler (Gaming)
 
 ```bash
+sudo dnf copr enable -y bieszczaders/kernel-cachyos-addons  # scx-scheds is not in the Fedora repos
 sudo dnf install -y scx-scheds
 sudo systemctl enable --now scx_loader.service
 sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 ```
 
-`scx_lavd` in Gaming mode gives better frame pacing and latency for games.
+`scx_bpfland` runs in Gaming mode for now. `scx_lavd` gives better frame pacing, but 1.1.3 starves tasks for 30–43 s until the kernel watchdog ejects it ([sched-ext/scx#3791](https://github.com/sched-ext/scx/issues/3791)). The fix is commit [`6d31ddd`](https://github.com/sched-ext/scx/commit/6d31ddd8973333e95ae7e3584e84029533064d69), which only touches lavd; switch `default_sched` back to `scx_lavd` once the COPR ships a build that contains it.
 
 > **Loads from kernel 7.2.7-200 on; broken on Fedora 7.1.x–7.2.6.** Those builds fail with
 > `the running kernel's BTF has malformed scx kfunc prototype(s)` — `KF_IMPLICIT_ARGS`
@@ -201,7 +202,7 @@ sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 > `grep CONFIG_PAHOLE_VERSION /boot/config-*` shows which pahole built each installed kernel.
 > Same failure: [CachyOS COPR #113](https://github.com/CachyOS/copr-linux-cachyos/issues/113).
 > Verify with `cat /sys/kernel/sched_ext/state` — `disabled` means EEVDF is running instead.
-> The kernel's watchdog can eject lavd on a `runnable task stall`; `scx_loader` restarts it
+> The kernel's watchdog ejects a scheduler on a `runnable task stall` and `scx_loader` restarts it
 > (`journalctl -k | grep 'runnable task stall'`).
 
 ### 7. ZRAM
@@ -256,7 +257,7 @@ sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 audit_backlog_limit=8
 | `audit_backlog_limit=8192` | The kernel default is 64, which overflows during boot once `audit=1` is set (`kauditd hold queue overflow` in dmesg) and silently drops audit events |
 | `skew_tick=1` | Skew timer ticks across cores — reduces lock contention |
 | `workqueue.power_efficient=false` | Disable power-efficient workqueues — prevents cross-core cache misses |
-| `preempt=full` | Full kernel preemption. Fedora builds `PREEMPT_DYNAMIC` and boots `lazy` by default; `full` trades a little throughput for lower worst-case latency. Check the active model with `cat /sys/kernel/debug/sched/preempt` |
+| `preempt=full` | Full kernel preemption. Fedora builds `PREEMPT_DYNAMIC` and boots `lazy` by default; `full` trades a little throughput for lower worst-case latency. Check the active model with `journalctl -k -b \| grep 'Dynamic Preempt'` |
 
 Takes effect on next boot. Verify with `cat /proc/cmdline`.
 
@@ -264,10 +265,10 @@ Takes effect on next boot. Verify with `cat /proc/cmdline`.
 
 ```bash
 sudo dnf install -y lm_sensors
-sudo cp system/k10temp.conf /etc/modules-load.d/k10temp.conf
-sudo modprobe k10temp
 sensors | grep Tctl  # Verify
 ```
+
+`k10temp` loads on its own through the CPU's PCI modalias; no `modules-load.d` entry is needed.
 
 ### 11. Firewall Hardening
 
@@ -335,7 +336,7 @@ To restore, boot from a live USB, mount the BTRFS partition, and use `btrfs subv
 
 ```bash
 # System services
-sudo systemctl disable --now ModemManager avahi-daemon pcscd
+sudo systemctl disable --now ModemManager avahi-daemon.socket avahi-daemon pcscd.socket pcscd
 
 # Unused services holding sockets. gssproxy must be masked, not disabled —
 # auth-rpcgss-module.service pulls it back in through WantedBy.
@@ -497,8 +498,9 @@ cp configs/kitty/kitty.conf ~/.config/kitty/kitty.conf
 
 ```bash
 mkdir -p ~/.local/share/fonts/JetBrainsMono
-curl -sL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
+curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/JetBrainsMono.tar.xz" \
   -o /tmp/JetBrainsMono.tar.xz
+echo "04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf  /tmp/JetBrainsMono.tar.xz" | sha256sum -c
 tar -xf /tmp/JetBrainsMono.tar.xz -C ~/.local/share/fonts/JetBrainsMono/
 fc-cache -fv
 ```
@@ -507,8 +509,12 @@ In KDE: **System Settings → Fonts → Fixed width** → `JetBrainsMono Nerd Fo
 
 ### Starship Prompt
 
+Pinned release, checksum-verified before install (`fedora-setup.sh` does the same for lazygit, ble.sh and the font):
+
 ```bash
-curl -sS https://starship.rs/install.sh | sh
+curl -fsSL https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz -o /tmp/starship.tar.gz
+echo "b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3  /tmp/starship.tar.gz" | sha256sum -c
+tar -xzf /tmp/starship.tar.gz -C /tmp starship && sudo install -m755 /tmp/starship /usr/local/bin/starship
 cp configs/starship/starship.toml ~/.config/starship.toml
 ```
 
@@ -525,17 +531,23 @@ cp configs/fish/functions/ya.fish ~/.config/fish/functions/ya.fish
 ### Shell Tools
 
 ```bash
-sudo dnf install -y zoxide lazygit fzf ripgrep fd-find bat eza git-delta
+sudo dnf install -y zoxide fzf ripgrep fd-find bat eza git-delta
 ```
+
+lazygit is not in the Fedora repos and the `atim/lazygit` COPR stopped at 0.47, so `fedora-setup.sh` installs the pinned upstream release (v0.65.1, SHA-256 checked) to `/usr/local/bin`.
 
 ### ble.sh (bash syntax highlighting)
 
-Adds fish-style syntax coloring and completion in bash. Load order matters — must be sourced before other config:
+Adds fish-style syntax coloring and completion in bash. Load order matters — it must be sourced before other config.
+
+Pinned to a master commit; `origin` must exist because `.gitmodules` uses a relative URL:
 
 ```bash
-git clone --recursive --depth 1 --shallow-submodules \
-  https://github.com/akinomyoga/ble.sh.git /tmp/ble.sh
-make -C /tmp/ble.sh install PREFIX=~/.local
+git init -q /tmp/ble.sh && cd /tmp/ble.sh
+git remote add origin https://github.com/akinomyoga/ble.sh.git
+git fetch -q --depth 1 origin d81fd54feb0d996fdff20dca27eaf0201f7015cc && git checkout -q FETCH_HEAD
+git submodule update -q --init --recursive --depth 1
+make install PREFIX=~/.local
 ```
 
 `configs/bashrc` holds the bashrc additions (aliases, zoxide, mise, starship). `fedora-setup.sh` handles the deploy: it prepends the ble.sh `--noattach` loader to line 1, then appends `configs/bashrc` itself followed by the `ble-attach` line — ble.sh requires `--noattach` first and `ble-attach` last.
@@ -545,19 +557,16 @@ make -C /tmp/ble.sh install PREFIX=~/.local
 ### mise (Runtime Version Manager)
 
 ```bash
-curl https://mise.run | sh
-eval "$(~/.local/bin/mise activate bash)"
+sudo dnf copr enable -y jdxcode/mise
+sudo dnf install -y mise
+eval "$(mise activate bash)"
 ```
 
 ### Yazi (Terminal File Manager)
 
-Download prebuilt binary (cargo install often fails on new versions):
-
 ```bash
-curl -fsSL "https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.zip" \
-  -o /tmp/yazi.zip
-unzip -qo /tmp/yazi.zip -d /tmp/yazi-bin
-sudo install -m755 /tmp/yazi-bin/yazi-x86_64-unknown-linux-gnu/yazi /usr/local/bin/yazi
+sudo dnf copr enable -y lihaohong/yazi
+sudo dnf install -y yazi
 ```
 
 ---
@@ -684,7 +693,7 @@ sudo dnf install -y gamescope
 sudo setcap cap_sys_nice+ep "$(which gamescope)"
 ```
 
-`CAP_SYS_NICE` lets Gamescope use `--rt` (real-time scheduling) without root. Steam launch option example, matched to the current display (3440x1440@170): `gamescope -W 3440 -H 1440 -r 170 --hdr-enabled -- %command%`
+`CAP_SYS_NICE` lets Gamescope use `--rt` (real-time scheduling) without root. rpm drops file capabilities whenever it replaces the binary, so `system/gamescope-caps.actions` (a `libdnf5-plugin-actions` hook) re-applies it after every gamescope install or update. Steam launch option example, matched to the current display (3440x1440@170): `gamescope -W 3440 -H 1440 -r 170 --hdr-enabled -- %command%`
 
 ### GameMode + MangoHud
 
@@ -709,7 +718,7 @@ KDE Plasma can bypass the compositor entirely for fullscreen games, reducing lat
 - Night Light off
 - No custom KWin effects (default set only)
 
-Compositor bypass happens automatically when conditions are met. Verify with KWin debug console: `qdbus org.kde.KWin /KWin showCompositing`.
+Compositor bypass happens automatically when conditions are met. Inspect it in the KWin debug console: `qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.showDebugConsole`.
 
 ### Steam Launch Options
 
@@ -755,6 +764,8 @@ bash scripts/emulation-setup.sh
 | SNES / N64 | RetroArch (snes9x / Mupen64Plus-Next cores) | Flatpak |
 | Wii | Dolphin | Flatpak |
 | Frontend | ES-DE (EmulationStation Desktop Edition) | Terra repo |
+
+Terra also ships steam, scx-scheds, lact and more, which would otherwise shadow the RPM Fusion and COPR builds. `emulation-setup.sh` limits it with `includepkgs` to `terra-release`, `terra-gpg-keys` and `emulationstation-de`.
 
 ### Default emulators (standalone, not libretro)
 
@@ -843,8 +854,9 @@ lsmod | grep nvidia
 cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor  # performance
 tuned-adm active                                             # latency-performance
 
-# SCX scheduler
-systemctl is-active scx_loader
+# SCX scheduler (scx_loader reports active even when nothing is attached)
+cat /sys/kernel/sched_ext/state      # enabled
+cat /sys/kernel/sched_ext/root/ops   # bpfland_...
 
 # ZRAM
 lsblk | grep zram
