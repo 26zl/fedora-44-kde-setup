@@ -13,12 +13,8 @@ warn()    { echo -e "  ${RED}!${RESET} $1"; }
 section() { echo -e "\n${TEAL}━━━ $1 ━━━${RESET}"; }
 
 section "ES-DE frontend (Terra repo)"
-sudo dnf install -y \
-    --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
-    --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' \
-    terra-release
-# Terra also ships steam, scx-scheds, lact and more; take only ES-DE from it
-sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,emulationstation-de*'
+# fedora-setup.sh adds Terra and limits it to the packages taken from it
+rpm -q terra-release &>/dev/null || { warn "Terra repo missing — run scripts/fedora-setup.sh first"; exit 1; }
 sudo dnf install -y emulationstation-de
 ok "ES-DE installed"
 

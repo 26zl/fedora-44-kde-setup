@@ -509,12 +509,13 @@ In KDE: **System Settings → Fonts → Fixed width** → `JetBrainsMono Nerd Fo
 
 ### Starship Prompt
 
-Pinned release, checksum-verified before install (`fedora-setup.sh` does the same for lazygit, ble.sh and the font):
+Packaged in the Terra repo, which `fedora-setup.sh` adds and restricts with `includepkgs` (see Emulation):
 
 ```bash
-curl -fsSL https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz -o /tmp/starship.tar.gz
-echo "b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3  /tmp/starship.tar.gz" | sha256sum -c
-tar -xzf /tmp/starship.tar.gz -C /tmp starship && sudo install -m755 /tmp/starship /usr/local/bin/starship
+sudo dnf install -y --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
+  --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' terra-release
+sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,starship,emulationstation-de*'
+sudo dnf install -y starship
 cp configs/starship/starship.toml ~/.config/starship.toml
 ```
 
@@ -765,7 +766,7 @@ bash scripts/emulation-setup.sh
 | Wii | Dolphin | Flatpak |
 | Frontend | ES-DE (EmulationStation Desktop Edition) | Terra repo |
 
-Terra also ships steam, scx-scheds, lact and more, which would otherwise shadow the RPM Fusion and COPR builds. `emulation-setup.sh` limits it with `includepkgs` to `terra-release`, `terra-gpg-keys` and `emulationstation-de`.
+`fedora-setup.sh` adds Terra and limits it with `includepkgs` to `terra-release`, `terra-gpg-keys`, `starship` and `emulationstation-de`; unrestricted, its steam, scx-scheds and lact builds would shadow the RPM Fusion and COPR ones. `emulation-setup.sh` stops if Terra is missing.
 
 ### Default emulators (standalone, not libretro)
 

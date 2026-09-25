@@ -37,11 +37,17 @@ sudo dnf install -y \
 sudo dnf group upgrade -y core
 ok "RPM Fusion free + nonfree installed"
 
-section "COPR repos"
+section "Third-party repos"
 sudo dnf copr enable -y bieszczaders/kernel-cachyos-addons  # scx-scheds
 sudo dnf copr enable -y lihaohong/yazi
 sudo dnf copr enable -y jdxcode/mise
-ok "COPR: scx-scheds, yazi, mise"
+sudo dnf install -y \
+    --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
+    --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' \
+    terra-release
+# Terra also ships steam, scx-scheds, lact and more; take only starship and ES-DE from it
+sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,starship,emulationstation-de*'
+ok "COPR: scx-scheds, yazi, mise; Terra: starship, ES-DE"
 
 section "NVIDIA drivers"
 sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver
@@ -79,6 +85,7 @@ sudo dnf install -y \
     eza \
     fastfetch \
     git-delta \
+    starship \
     yazi \
     mise
 
@@ -91,14 +98,6 @@ fetch() {  # url sha256 file
     curl -fsSL "$1" -o "$3"
     echo "$2  $3" | sha256sum -c --quiet -
 }
-
-if ! command -v starship &>/dev/null; then
-    fetch https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz \
-        b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3 "$dl/starship.tar.gz"
-    tar -xzf "$dl/starship.tar.gz" -C "$dl" starship
-    sudo install -m755 "$dl/starship" /usr/local/bin/starship
-fi
-ok "Starship $(starship --version | head -1 | awk '{print $2}')"
 
 if ! command -v lazygit &>/dev/null; then
     fetch https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_linux_x86_64.tar.gz \
