@@ -41,9 +41,10 @@ section "Third-party repos"
 sudo dnf copr enable -y bieszczaders/kernel-cachyos-addons  # scx-scheds
 sudo dnf copr enable -y lihaohong/yazi
 sudo dnf copr enable -y jdxcode/mise
+# dnf does not expand $releasever inside --setopt values, so the shell fills in the release
 sudo dnf install -y \
-    --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
-    --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' \
+    --repofrompath "terra,https://repos.fyralabs.com/terra$(rpm -E %fedora)" \
+    --setopt="terra.gpgkey=https://repos.fyralabs.com/terra$(rpm -E %fedora)/key.asc" \
     terra-release
 # Terra also ships steam, scx-scheds, lact and more; take only starship and ES-DE from it
 sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,starship,emulationstation-de*'

@@ -512,8 +512,8 @@ In KDE: **System Settings → Fonts → Fixed width** → `JetBrainsMono Nerd Fo
 Packaged in the Terra repo, which `fedora-setup.sh` adds and restricts with `includepkgs` (see Emulation):
 
 ```bash
-sudo dnf install -y --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
-  --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' terra-release
+sudo dnf install -y --repofrompath "terra,https://repos.fyralabs.com/terra$(rpm -E %fedora)" \
+  --setopt="terra.gpgkey=https://repos.fyralabs.com/terra$(rpm -E %fedora)/key.asc" terra-release
 sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,starship,emulationstation-de*'
 sudo dnf install -y starship
 cp configs/starship/starship.toml ~/.config/starship.toml

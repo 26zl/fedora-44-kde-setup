@@ -80,8 +80,8 @@ jobs:
             "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
             "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
           for c in $(grep -hoP 'copr enable -y \K\S+' scripts/*.sh); do dnf -y -q copr enable "$c"; done
-          dnf -y -q install --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
-            --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' terra-release
+          dnf -y -q install --repofrompath "terra,https://repos.fyralabs.com/terra$(rpm -E %fedora)" \
+            --setopt="terra.gpgkey=https://repos.fyralabs.com/terra$(rpm -E %fedora)/key.asc" terra-release
 
       - name: Resolve every package
         run: |
