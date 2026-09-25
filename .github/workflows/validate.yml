@@ -5,6 +5,8 @@ on:
     branches: ["*"]
   pull_request:
     branches: ["*"]
+  schedule:
+    - cron: "0 6 * * 1"  # weekly, catches upstream package renames
 
 permissions:
   contents: read
@@ -16,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check no plaintext passwords or IPs in configs
         run: |
@@ -59,5 +61,33 @@ jobs:
           for f in system/*; do
             base=$(basename "$f")
             grep -qF "$base" scripts/apply-system.sh || { echo "NOT DEPLOYED by apply-system.sh: $f"; missing=1; }
+          done
+          exit $missing
+
+  packages:
+    name: Check every package the scripts install exists
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Add the repos the scripts add
+        run: |
+          dnf -y -q install dnf5-plugins
+          dnf -y -q install \
+            "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+            "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+          for c in $(grep -hoP 'copr enable -y \K\S+' scripts/*.sh); do dnf -y -q copr enable "$c"; done
+          dnf -y -q install --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
+            --setopt='terra.gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc' terra-release
+
+      - name: Resolve every package
+        run: |
+          missing=0
+          for p in $(sed ':a;/\\$/{N;s/\\\n//;ba}' scripts/*.sh | grep -oP 'dnf install -y \K.*' |
+                     tr ' ' '\n' | grep -E '^[a-z0-9][a-z0-9._+-]*$' | sort -u); do
+            dnf -q repoquery --available "$p" | grep -q . || { echo "not available: $p"; missing=1; }
           done
           exit $missing
