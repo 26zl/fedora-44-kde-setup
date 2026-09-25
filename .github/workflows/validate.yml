@@ -82,6 +82,8 @@ jobs:
           for c in $(grep -hoP 'copr enable -y \K\S+' scripts/*.sh); do dnf -y -q copr enable "$c"; done
           dnf -y -q install --repofrompath "terra,https://repos.fyralabs.com/terra$(rpm -E %fedora)" \
             --setopt="terra.gpgkey=https://repos.fyralabs.com/terra$(rpm -E %fedora)/key.asc" terra-release
+          # imports the repo signing keys once; repoquery would otherwise stop at the prompt
+          dnf -y -q makecache
 
       - name: Resolve every package
         run: |
