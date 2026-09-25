@@ -25,8 +25,6 @@ sudo cp system/99-disable-modules.conf /etc/modprobe.d/99-disable-modules.conf
 sudo cp system/dnf.conf /etc/dnf/dnf.conf
 sudo cp system/macros.image-language-conf /etc/rpm/macros.image-language-conf
 sudo cp system/zram-generator.conf /etc/systemd/zram-generator.conf
-sudo cp system/k10temp.conf /etc/modules-load.d/k10temp.conf
-sudo modprobe k10temp 2>/dev/null || true
 sudo cp system/hugepages.conf /etc/tmpfiles.d/hugepages.conf
 sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ok "99-tweaks.conf, 99-disable-modules.conf, dnf.conf, zram-generator.conf, hugepages.conf"
