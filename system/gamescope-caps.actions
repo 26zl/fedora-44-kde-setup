@@ -1,0 +1,2 @@
+# rpm drops file capabilities when it replaces the binary, so re-grant CAP_SYS_NICE (gamescope --rt) after every install or update
+post_transaction:/usr/bin/gamescope:in::/usr/bin/setcap cap_sys_nice+ep /usr/bin/gamescope

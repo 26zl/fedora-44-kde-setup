@@ -113,5 +113,10 @@ sudo systemctl daemon-reload
 sudo setquota -u "$(id -u)" 0 0 0 0 /dev/shm 2>/dev/null || true
 ok "usrquota dropped on /tmp (reboot); /dev/shm per-user limit cleared at each login"
 
+section "gamescope capabilities"
+sudo mkdir -p /etc/dnf/libdnf5-plugins/actions.d
+sudo cp system/gamescope-caps.actions /etc/dnf/libdnf5-plugins/actions.d/gamescope-caps.actions
+ok "CAP_SYS_NICE re-applied after every gamescope update (needs libdnf5-plugin-actions)"
+
 section "Done"
 ok "All system files deployed. Reboot recommended if modprobe/zram configs changed."
