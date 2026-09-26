@@ -1,6 +1,8 @@
 #!/bin/bash
 # Runs scripts/lib/hw.sh and scripts/hwstat.sh against fixture sysfs trees and
 # stub commands, one fixture per kind of machine the setup has to handle.
+# HW_ROOT, FORM_FACTOR and NVIDIA_DRIVER are read by the sourced functions.
+# shellcheck disable=SC2034
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
