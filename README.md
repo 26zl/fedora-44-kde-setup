@@ -11,14 +11,25 @@
 
 Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on Wayland. Focused on low-latency gaming and a clean rice.
 
-**Hardware:**
+## Hardware Support
 
-- CPU: AMD Ryzen 9 9900X (Zen 5, 12-core)
-- GPU: NVIDIA GeForce RTX 5070 (Blackwell, 12GB VRAM)
-- RAM: 32GB DDR5
-- Motherboard: Gigabyte X870E AORUS ELITE WIFI7
-- Storage: NVMe SSD (KINGSTON SNV3S1000G, 1TB)
-- Dual-boot: Windows 11 Pro
+The scripts detect the hardware and adapt to it, so the same repo sets up a gaming desktop or a laptop, with an NVIDIA, AMD or Intel GPU:
+
+| Detected | What the setup does |
+| --- | --- |
+| NVIDIA GPU, Turing (RTX 20 / GTX 16) or newer | `akmod-nvidia` from RPM Fusion, NVIDIA Wayland and suspend configs, MOK enrollment under Secure Boot |
+| NVIDIA GPU, Maxwell, Pascal or Volta (GTX 900 / 10) | The `580xx` driver branch, the last one that supports them. Older cards stay on nouveau |
+| AMD GPU | `mesa-va-drivers-freeworld` for H.264/H.265 hardware video |
+| Intel GPU | `intel-media-driver` for H.264/H.265 hardware video |
+| Desktop | tuned `latency-performance`, scx Gaming mode, `workqueue.power_efficient=false` |
+| Laptop | tuned keeps its battery-aware `balanced` profile, scx runs in Auto mode. With hybrid graphics the desktop stays on the integrated GPU |
+| Windows in the UEFI boot list | GRUB remembers the last-booted OS |
+| btrfs root | Snapper snapshots |
+| AMD or Intel CPU | CPU temperature from `k10temp` or `coretemp` in Conky and `sysinfo` |
+
+Detection lives in `scripts/lib/hw.sh`, and `fedora-setup.sh` prints what it found before it changes anything. To override it, copy `setup.conf.example` to `setup.conf` (git-ignored) and set `FORM_FACTOR`, `NVIDIA_DRIVER` or `AUDIO_TRIM`. Peripheral quirks (LAMZU mice, DualSense controllers, a few USB receivers) match on USB IDs and do nothing unless the device is plugged in.
+
+Developed and verified on an AMD desktop with a discrete NVIDIA card next to the CPU's integrated GPU, dual-booting Windows. The other hardware paths are covered by `tests/hw-detect.sh` and the CI package check.
 
 ---
 
@@ -40,43 +51,49 @@ Post-installation guide, config files, and scripts for Fedora 44 KDE Plasma 6 on
 │   ├── starship/starship.toml  # Shell prompt
 │   ├── wireplumber/
 │   │   └── wireplumber.conf.d/
-│   │       └── 50-audio.conf   # Disable onboard, iGPU HDMI and webcam audio
+│   │       └── 50-audio.conf   # Opt-in (AUDIO_TRIM): hide onboard AMD, iGPU HDMI and webcam audio
 │   ├── systemd/
 │   │   └── conky.service       # ~/.config/systemd/user/ — Conky autostart service
 │   └── bashrc                  # ~/.bashrc additions (ble.sh, zoxide, aliases)
 ├── system/
-│   ├── nvidia-wayland.conf     # /etc/environment.d/ — NVIDIA Wayland env vars
-│   ├── nvidia-performance.conf # /etc/modprobe.d/ — NVIDIA kernel options
+│   ├── nvidia-wayland.conf     # /etc/environment.d/ — NVIDIA Wayland env vars (NVIDIA only, not on hybrid laptops)
+│   ├── nvidia-performance.conf # /etc/modprobe.d/ — NVIDIA kernel options (NVIDIA only)
 │   ├── 99-tweaks.conf          # /etc/sysctl.d/ — performance tweaks
 │   ├── 99-disable-modules.conf # /etc/modprobe.d/ — blacklist unused protocols (attack surface)
 │   ├── dnf.conf                # /etc/dnf/ — DNF settings
-│   ├── zram-generator.conf     # /etc/systemd/ — ZRAM 8GB
+│   ├── zram-generator.conf     # /etc/systemd/ — ZRAM as large as RAM, up to 8GB, zstd
 │   ├── tmp-mount-override.conf # /etc/systemd/system/tmp.mount.d/ — drop tmpfs usrquota
-│   ├── scx_loader.toml         # /etc/scx_loader/ — scx_bpfland Gaming mode (lavd until #3791 ships)
+│   ├── scx_loader.toml         # /etc/scx_loader/ — scx_bpfland Gaming mode on desktops (lavd until #3791 ships)
+│   ├── scx_loader-laptop.toml  # /etc/scx_loader/ — scx_bpfland Auto mode on laptops
 │   ├── resolved-hardening.conf # /etc/systemd/resolved.conf.d/ — DNSSEC, DoT, LLMNR/mDNS off
 │   ├── tuned-ppd.conf          # /etc/tuned/ppd.conf — PPD → tuned profile map
 │   ├── macros.image-language-conf # /etc/rpm/ — limit langpacks to en_US
 │   ├── ntsync.conf             # /etc/modules-load.d/ — load ntsync at boot
 │   ├── 99-ntsync.rules         # /etc/udev/rules.d/ — ntsync user access
-│   ├── 99-lamzu.rules          # /etc/udev/rules.d/ — LAMZU Maya X udev rules
+│   ├── 99-lamzu.rules          # /etc/udev/rules.d/ — LAMZU mouse configurator access (by USB ID)
 │   ├── 99-dualsense.rules      # /etc/udev/rules.d/ — DualSense touchpad/motion noise fix
-│   ├── 99-disable-wakeup.rules # /etc/udev/rules.d/ — disable USB wakeup
-│   ├── libinput-overrides.quirks # /etc/libinput/ — disable mouse debouncing
+│   ├── 99-disable-wakeup.rules # /etc/udev/rules.d/ — LAMZU dongles must not wake the system
+│   ├── libinput-overrides.quirks # /etc/libinput/ — no mouse debouncing for LAMZU mice
 │   ├── hugepages.conf          # /etc/tmpfiles.d/ — transparent hugepages
-│   ├── kwin-display-fix.sh     # /usr/lib/systemd/system-sleep/ — KWin resume hook
-│   ├── usb-autosuspend.service # /etc/systemd/system/ — autosuspend xHCI-blocking USB devices
+│   ├── kwin-display-fix.sh     # /usr/lib/systemd/system-sleep/ — USB and amdgpu resume quirks
+│   ├── usb-autosuspend.service # /etc/systemd/system/ — autosuspend xHCI-blocking USB devices (by USB ID)
 │   ├── gamescope-caps.actions  # /etc/dnf/libdnf5-plugins/actions.d/ — re-grant CAP_SYS_NICE after gamescope updates
 │   ├── plasmalogin.conf        # /etc/plasmalogin.conf — login screen wallpaper
 │   └── plasmalogin-restart.conf # systemd drop-in — auto-restart plasmalogin on crash
 ├── scripts/
+│   ├── lib/hw.sh               # Hardware detection shared by the setup scripts
 │   ├── fedora-setup.sh         # Automated post-upgrade setup (run after the initial system upgrade + reboot)
 │   ├── apply-system.sh         # Deploy system/ files to their system paths
 │   ├── emulation-setup.sh      # ES-DE + standalone emulators (PS1/2/3, Wii)
 │   ├── setup-github.sh         # GitHub CLI login + git identity/defaults
 │   ├── rice-start.sh           # Restart Conky
 │   ├── sysinfo.sh              # System health overview in terminal
+│   ├── hwstat.sh               # CPU/GPU readings for Conky and sysinfo (AMD, Intel, NVIDIA)
 │   ├── deep-health.sh          # Full hardware audit — firmware, SMART, btrfs scrub, self-test
 │   └── mok-reenroll.sh         # Re-enroll the akmods MOK after a BIOS flash
+├── tests/
+│   └── hw-detect.sh            # Detection and hwstat tests against fixture sysfs trees
+├── setup.conf.example          # Per-machine overrides; copy to setup.conf
 └── wallpaper/
     └── wallpaper.jpg           # Darth Vader — dark, teal glow, red lightsaber
 ```
@@ -93,10 +110,11 @@ sudo reboot
 # 2. After the reboot, clone and run the setup
 git clone https://github.com/26zl/fedora-44-kde-setup.git ~/fedora-setup
 cd ~/fedora-setup
+cp setup.conf.example setup.conf   # optional: only to override the detection
 bash scripts/fedora-setup.sh
 ```
 
-> The setup script automates most of the guide below. A few steps stay manual: the initial system upgrade + reboot (Step 1), the optional service trimming, applying the Layan Kvantum theme, and Secure Boot MOK enrollment + BIOS settings.
+> The setup script automates most of the guide below. A few steps stay manual: the initial system upgrade + reboot (Step 1), the optional service trimming, applying the Layan Kvantum theme, and Secure Boot MOK enrollment + BIOS settings (NVIDIA only).
 
 ---
 
@@ -127,9 +145,23 @@ sudo dnf install -y \
 sudo dnf group upgrade -y core
 ```
 
-### 4. NVIDIA Drivers + Secure Boot
+### 4. GPU Drivers
 
-**Install drivers:**
+`fedora-setup.sh` installs what the detected GPUs need. Several can apply at once, e.g. an AMD iGPU next to an NVIDIA card.
+
+**AMD** — Fedora's Mesa leaves out H.264/H.265. RPM Fusion's build adds them, and libva loads it ahead of Fedora's:
+
+```bash
+sudo dnf install -y mesa-va-drivers-freeworld
+```
+
+**Intel** — same for Intel's media driver:
+
+```bash
+sudo dnf install -y intel-media-driver
+```
+
+**NVIDIA** — the current branch covers Turing (RTX 20 / GTX 16) and newer. Maxwell, Pascal and Volta (GTX 900 / 10) need the `580xx` branch, the last one that supports them; for those cards, use `akmod-nvidia-580xx` and `xorg-x11-drv-nvidia-580xx-cuda` instead. Kepler and older cards stay on nouveau.
 
 ```bash
 sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver
@@ -149,13 +181,15 @@ sudo cp system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
 sudo cp system/nvidia-performance.conf /etc/modprobe.d/nvidia-performance.conf
 ```
 
+Skip `nvidia-wayland.conf` on a laptop with hybrid graphics. It forces GLX, GBM and VA-API onto NVIDIA, but the panel is driven by the integrated GPU. There the desktop stays on the iGPU and single programs run on NVIDIA with `switcherooctl launch <program>`. `apply-system.sh` makes that call itself.
+
 **Enable power management services:**
 
 ```bash
 sudo systemctl enable nvidia-suspend nvidia-resume nvidia-hibernate
 ```
 
-**Enroll Secure Boot MOK key:**
+**Enroll Secure Boot MOK key** (only with Secure Boot on; `mokutil --sb-state` tells):
 
 ```bash
 sudo mokutil --import /etc/pki/akmods/certs/public_key.der
@@ -171,18 +205,18 @@ lsmod | grep nvidia          # Should list nvidia, nvidia_drm, nvidia_modeset, n
 nvidia-smi                   # Should show your GPU
 ```
 
-### 5. CPU Performance (AMD Ryzen amd-pstate-epp)
+### 5. CPU Performance (tuned)
 
 ```bash
 sudo dnf install -y tuned
 sudo systemctl enable --now tuned
 sudo cp system/tuned-ppd.conf /etc/tuned/ppd.conf
-sudo tuned-adm profile latency-performance
+sudo tuned-adm profile latency-performance   # desktops only
 ```
 
-The `tuned-ppd.conf` maps KDE's "Performance" power mode to `latency-performance` instead of the default `throughput-performance`, so the profile persists correctly at boot.
+The `tuned-ppd.conf` maps KDE's "Performance" power mode to `latency-performance` instead of the default `throughput-performance`, so the profile persists correctly at boot. Laptops skip the `tuned-adm` line and keep tuned-ppd's `balanced` default, which switches to `balanced-battery` when unplugged. Performance is still one click away in the battery applet.
 
-> **Note:** AMD Ryzen 9000X uses `amd-pstate-epp`. Only `performance` and `powersave` governors are valid — not `schedutil` or others.
+> **Note:** Recent AMD CPUs run `amd-pstate-epp` and Intel CPUs `intel_pstate`, both in active mode by default. In that mode only the `performance` and `powersave` governors exist, not `schedutil` or others.
 
 ### 6. SCX Scheduler (Gaming)
 
@@ -192,6 +226,8 @@ sudo dnf install -y scx-scheds
 sudo systemctl enable --now scx_loader.service
 sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
 ```
+
+On a laptop, deploy `system/scx_loader-laptop.toml` instead: Auto mode, because Gaming mode keeps tasks on the fastest cores at the cost of battery.
 
 `scx_bpfland` runs in Gaming mode for now. `scx_lavd` gives better frame pacing, but 1.1.3 starves tasks for 30–43 s until the kernel watchdog ejects it ([sched-ext/scx#3791](https://github.com/sched-ext/scx/issues/3791)). The fix is commit [`6d31ddd`](https://github.com/sched-ext/scx/commit/6d31ddd8973333e95ae7e3584e84029533064d69), which only touches lavd; switch `default_sched` back to `scx_lavd` once the COPR ships a build that contains it.
 
@@ -213,7 +249,7 @@ sudo cp system/zram-generator.conf /etc/systemd/zram-generator.conf
 sudo reboot
 ```
 
-Verify: `lsblk | grep zram` — should show 8GB swap device.
+Verify: `lsblk | grep zram` — should show a swap device as large as the RAM, up to 8GB (Fedora's own size rule; this file adds zstd compression).
 
 ### 8. sysctl Tweaks
 
@@ -250,6 +286,8 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 audit_backlog_limit=8192 skew_tick=1 workqueue.power_efficient=false preempt=full"
 ```
 
+`apply-system.sh` leaves `workqueue.power_efficient=false` out on laptops, where the power-efficient workqueues save battery.
+
 | Parameter | Purpose |
 | --- | --- |
 | `nowatchdog` | Disable watchdog timers — reduces interrupts |
@@ -261,14 +299,14 @@ sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 audit_backlog_limit=8
 
 Takes effect on next boot. Verify with `cat /proc/cmdline`.
 
-### 10. CPU Temperature Sensor (k10temp)
+### 10. CPU Temperature Sensor
 
 ```bash
 sudo dnf install -y lm_sensors
-sensors | grep Tctl  # Verify
+sensors | grep -E 'Tctl|Package id'  # Verify: Tctl on AMD, Package id 0 on Intel
 ```
 
-`k10temp` loads on its own through the CPU's PCI modalias; no `modules-load.d` entry is needed.
+`k10temp` (AMD) and `coretemp` (Intel) load on their own through the CPU's modalias; no `modules-load.d` entry is needed. `scripts/hwstat.sh cpu-temp` reads whichever one is present.
 
 ### 11. Firewall Hardening
 
@@ -290,6 +328,8 @@ firewall-cmd --list-services  # Verify: dhcpv6-client
 
 ### 12. Dual-Boot (Clock + Sleep/Hibernate)
 
+Only relevant when Windows shares the machine. `fedora-setup.sh` checks the UEFI boot list for a Windows Boot Manager entry and otherwise only sets the clock to UTC.
+
 **Clock** — Windows and Linux must read the hardware clock the same way, or the time is off by your UTC offset after switching OS. Use UTC on both sides:
 
 - **Linux** → UTC: `fedora-setup.sh` runs `sudo timedatectl set-local-rtc 0`. Verify with `timedatectl` — it must show `RTC in local TZ: no`. If it shows `yes`, the two clocks fight; re-run `sudo timedatectl set-local-rtc 0`. *(This is the usual reason the time is still wrong even after the Windows reg edit.)*
@@ -301,7 +341,7 @@ firewall-cmd --list-services  # Verify: dhcpv6-client
 
 **Sleep / hibernate** — after a long sleep, Windows (Modern Standby) auto-hibernates and powers off. The next wake is a full boot, so GRUB appears (Fedora is first in the UEFI boot order) and after its timeout boots Fedora — stranding the hibernated Windows session.
 
-- **Windows** — disable hibernate (a desktop never needs it; sleep keeps RAM powered), PowerShell as Administrator:
+- **Windows** — disable hibernate (a desktop never needs it; sleep keeps RAM powered; on a laptop, weigh this against battery drain while asleep), PowerShell as Administrator:
   ```powershell
   powercfg /h off
   ```
@@ -310,7 +350,7 @@ firewall-cmd --list-services  # Verify: dhcpv6-client
 
 ### 13. Backup — Snapper (BTRFS Snapshots)
 
-Fedora installs on BTRFS by default. Snapper integrates natively with Fedora's subvolume layout.
+Fedora installs on BTRFS by default. Snapper integrates natively with Fedora's subvolume layout. `fedora-setup.sh` skips this step when the root filesystem is something else.
 
 ```bash
 sudo dnf install -y snapper btrfs-assistant
@@ -335,7 +375,8 @@ To restore, boot from a live USB, mount the BTRFS partition, and use `btrfs subv
 ### 14. Disable Unnecessary Services
 
 ```bash
-# System services
+# System services. Keep ModemManager on a laptop with a mobile broadband (WWAN)
+# modem, and pcscd if you use a smart card or a YubiKey's PIV/OpenPGP applet.
 sudo systemctl disable --now ModemManager avahi-daemon.socket avahi-daemon pcscd.socket pcscd
 
 # Unused services holding sockets. gssproxy must be masked, not disabled —
@@ -375,11 +416,21 @@ Undo any of these with `systemctl --user unmask <unit>`.
 
 ### 15. libinput Debouncing
 
-libinput adds eager debouncing to all mice by default. The LAMZU Maya X 8K uses Hall Effect sensors — debouncing is unnecessary and can block fast clicks.
+libinput adds eager debouncing to all mice by default. LAMZU mice such as the Maya X 8K use Hall Effect switches — debouncing is unnecessary and can block fast clicks. The quirk matches LAMZU's USB vendor IDs, so every other mouse keeps the default debouncing; add a section with your mouse's vendor ID (`lsusb`) to extend it.
 
 ```bash
 sudo mkdir -p /etc/libinput
 sudo cp system/libinput-overrides.quirks /etc/libinput/local-overrides.quirks
+```
+
+### Audio Trim (optional)
+
+`configs/wireplumber/wireplumber.conf.d/50-audio.conf` hides the onboard AMD audio controller, AMD iGPU HDMI audio and every webcam microphone from PipeWire. That is right when all sound goes through another device, such as a USB headset or the GPU's HDMI/DP output, and wrong otherwise — on many laptops the same AMD controller drives the speakers. It is therefore opt-in: set `AUDIO_TRIM=yes` in `setup.conf`, or copy it by hand:
+
+```bash
+mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+cp configs/wireplumber/wireplumber.conf.d/50-audio.conf ~/.config/wireplumber/wireplumber.conf.d/
+systemctl --user restart wireplumber
 ```
 
 ---
@@ -437,7 +488,7 @@ sudo sysctl -a > /tmp/sysctl.txt
 python3 /tmp/khc/bin/kernel-hardening-checker -c /boot/config-$(uname -r) -l /proc/cmdline -s /tmp/sysctl.txt -m show_fail
 ```
 
-Most failures are expected. The kconfig checks describe Fedora's kernel build — fixing them means a self-built kernel, which breaks Secure Boot. The per-vulnerability mitigation checks only accept `mitigations=auto,nosmt`; the default `auto` is mitigated, which `deep-health.sh` confirms from sysfs. The zero-cost findings are in `99-tweaks.conf` (`kernel.unprivileged_bpf_disabled=1`, `kernel.oops_limit=100`, `vm.mmap_rnd_bits=32`). Findings that must not be applied here: `nosmt` (halves the threads), `ia32_emulation=0` (Steam and 32-bit games), `user.max_user_namespaces=0` (Flatpak, Steam pressure-vessel, browser sandboxes), `lockdown=confidentiality` and `kernel.kptr_restrict=2` (perf and bpftrace), `kernel.yama.ptrace_scope=3` (gdb, strace), `vm.mmap_rnd_compat_bits=16` (32-bit games lose contiguous address space), `kernel.warn_limit` (a driver's WARN splats would panic the box), `pti=on` and `intel_iommu=on` (Intel-only).
+Most failures are expected. The kconfig checks describe Fedora's kernel build — fixing them means a self-built kernel, which breaks Secure Boot. The per-vulnerability mitigation checks only accept `mitigations=auto,nosmt`; the default `auto` is mitigated, which `deep-health.sh` confirms from sysfs. The zero-cost findings are in `99-tweaks.conf` (`kernel.unprivileged_bpf_disabled=1`, `kernel.oops_limit=100`, `vm.mmap_rnd_bits=32`). Findings that must not be applied here: `nosmt` (halves the threads), `ia32_emulation=0` (Steam and 32-bit games), `user.max_user_namespaces=0` (Flatpak, Steam pressure-vessel, browser sandboxes), `lockdown=confidentiality` and `kernel.kptr_restrict=2` (perf and bpftrace), `kernel.yama.ptrace_scope=3` (gdb, strace), `vm.mmap_rnd_compat_bits=16` (32-bit games lose contiguous address space), `kernel.warn_limit` (a driver's WARN splats would panic the box), and on AMD `pti=on` and `intel_iommu=on`, which only apply to Intel CPUs.
 
 [dev-sec/ansible-collection-hardening](https://github.com/dev-sec/ansible-collection-hardening) and [dev-sec/linux-baseline](https://github.com/dev-sec/linux-baseline) are not used. They are server baselines: the defaults (`rp_filter=1`, `net.ipv4.ip_forward=0`, `kernel.kptr_restrict=2`, `kernel.sysrq=0`, a templated `auditd.conf`) break Mullvad, Tailscale, Docker and bpftrace here, and linux-baseline needs an InSpec runtime to check what lynis already covers.
 
@@ -650,13 +701,15 @@ systemctl --user daemon-reload
 systemctl --user enable --now conky.service
 ```
 
+The config builds its hardware rows when Conky starts. It shows one row per four CPU cores (up to 16), GPU lines for whatever `~/scripts/hwstat.sh` can read, and a line per disk mounted under `/mnt`. It adapts to the machine without edits.
+
 ---
 
 ## Gaming Setup
 
 ### Steam
 
-Installed natively from RPM Fusion (`sudo dnf install steam`), not Flatpak. The Flatpak sandbox ships its own NVIDIA driver layer, which broke Vulkan device init (`RenderDeviceMgr001`) and forced shader reprocessing on this multi-GPU box. Native uses the host driver directly. Launch options: `gamemoderun mangohud %command%` — host gamemode and MangoHud work without sandbox extensions. On a multi-GPU system, if a game picks the wrong GPU, pin NVIDIA with `__NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only` (NVIDIA's offload layer, container-safe). Avoid `VK_LOADER_DRIVERS_SELECT` — it breaks Steam's pressure-vessel container.
+Installed natively from RPM Fusion (`sudo dnf install steam`), not Flatpak. The Flatpak sandbox ships its own NVIDIA driver layer, which broke Vulkan device init (`RenderDeviceMgr001`) and forced shader reprocessing on a multi-GPU machine. Native uses the host driver directly. Launch options: `gamemoderun mangohud %command%` — host gamemode and MangoHud work without sandbox extensions. On a multi-GPU system, if a game picks the wrong GPU, pin NVIDIA with `__NV_PRIME_RENDER_OFFLOAD=1 __VK_LAYER_NV_optimus=NVIDIA_only` (NVIDIA's offload layer, container-safe). Avoid `VK_LOADER_DRIVERS_SELECT` — it breaks Steam's pressure-vessel container.
 
 ### Flatpak
 
@@ -694,7 +747,7 @@ sudo dnf install -y gamescope
 sudo setcap cap_sys_nice+ep "$(which gamescope)"
 ```
 
-`CAP_SYS_NICE` lets Gamescope use `--rt` (real-time scheduling) without root. rpm drops file capabilities whenever it replaces the binary, so `system/gamescope-caps.actions` (a `libdnf5-plugin-actions` hook) re-applies it after every gamescope install or update. Steam launch option example, matched to the current display (3440x1440@170): `gamescope -W 3440 -H 1440 -r 170 --hdr-enabled -- %command%`
+`CAP_SYS_NICE` lets Gamescope use `--rt` (real-time scheduling) without root. rpm drops file capabilities whenever it replaces the binary, so `system/gamescope-caps.actions` (a `libdnf5-plugin-actions` hook) re-applies it after every gamescope install or update. Steam launch option example, with your display's mode filled in: `gamescope -W <width> -H <height> -r <refresh> --hdr-enabled -- %command%`. From a shell, `gcs2 <command>` (in `configs/bashrc` and `config.fish`) runs a program in gamescope at the primary monitor's current mode, read from `kscreen-doctor`.
 
 ### GameMode + MangoHud
 
@@ -728,10 +781,10 @@ Per-game launch options in Steam (right-click game → Properties → Launch Opt
 | Use case | Launch option |
 | --- | --- |
 | Native Wayland (GE-Proton) | `PROTON_ENABLE_WAYLAND=1 %command%` |
-| DLSS / RTX / Reflex | `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 %command%` |
+| DLSS / RTX / Reflex (NVIDIA) | `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 %command%` |
 | Ray tracing (VKD3D) | `VKD3D_CONFIG=dxr %command%` |
-| GPU not detected in game | add `PROTON_HIDE_NVIDIA_GPU=0` |
-| All combined | `PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 PROTON_HIDE_NVIDIA_GPU=0 VKD3D_CONFIG=dxr %command%` |
+| NVIDIA GPU not detected in game | add `PROTON_HIDE_NVIDIA_GPU=0` |
+| All combined (NVIDIA) | `PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 PROTON_HIDE_NVIDIA_GPU=0 VKD3D_CONFIG=dxr %command%` |
 
 Append `gamemoderun mangohud` after the env vars to keep GameMode and the overlay, e.g. `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 gamemoderun mangohud %command%`.
 
@@ -739,11 +792,11 @@ On Proton 9+/GE-Proton 10.x, NVAPI is on by default, so `PROTON_ENABLE_NVAPI` is
 
 ### Display & competitive
 
-Current display: ultrawide **3440x1440@170Hz** on DP-4 (NVIDIA). Verify the compositor actually runs at panel rate with `qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.supportInformation | grep 'Refresh Rate'` — `MaxFPS` in `kwinrc` is an X11 leftover and does not limit Wayland.
+Verify the compositor actually runs at the panel's refresh rate with `qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.supportInformation | grep 'Refresh Rate'` — `MaxFPS` in `kwinrc` is an X11 leftover and does not limit Wayland.
 
-- **VRR**: System Settings → Display & Monitor → Adaptive Sync → `Automatic`. Driver 555.58+ gives Wayland explicit sync (no NVIDIA flicker). Good for desktop and single-player; leave it off for competitive CS2 (adds ~1-3 ms once FPS is well above refresh).
+- **VRR**: System Settings → Display & Monitor → Adaptive Sync → `Automatic`. On NVIDIA, driver 555.58+ gives Wayland explicit sync (no flicker). Good for desktop and single-player; leave it off for competitive CS2 (adds ~1-3 ms once FPS is well above refresh).
 - **HDR**: use KWin's native HDR per-display. Avoid gamescope HDR on Plasma 6.5 with NVIDIA — known washed/grey regression. Keep HDR off for CS2 (it's SDR).
-- **CS2 NVIDIA Reflex**: leave **Disabled** in Video settings — on Linux/NVIDIA it often hurts frametime consistency. Cap frames with `+fps_max 400` instead.
+- **CS2 NVIDIA Reflex** (NVIDIA only): leave **Disabled** in Video settings — on Linux/NVIDIA it often hurts frametime consistency. Cap frames with `+fps_max 400` instead.
 
 `PROTON_ENABLE_WAYLAND=1` requires GE-Proton — standard Steam Proton ignores it.
 
@@ -798,11 +851,15 @@ Not shipped — provide your own:
 
 ### `scripts/fedora-setup.sh`
 
-Automated setup for a fresh Fedora 44 KDE install. Run after the initial system upgrade + reboot. Deploys the `system/` files via `apply-system.sh`. Secure Boot MOK enrollment and BIOS settings stay manual (see the guide).
+Automated setup for a fresh Fedora 44 KDE install. Run after the initial system upgrade + reboot. It prints the detected hardware first, installs the matching GPU drivers, and deploys the `system/` files via `apply-system.sh`. Secure Boot MOK enrollment and BIOS settings stay manual (see the guide).
 
 ### `scripts/apply-system.sh`
 
-Deploys every file in `system/` to its live path (see the repository structure above) and reloads what can be reloaded without a reboot. `fedora-setup.sh` calls it during setup; run it standalone to re-apply system configs after editing them.
+Deploys every file in `system/` to its live path (see the repository structure above) and reloads what can be reloaded without a reboot. Hardware-specific files follow the detection: NVIDIA configs only with an NVIDIA driver, the desktop or laptop variants of tuned, scx and the kernel parameters. A config it deployed earlier that no longer fits the hardware, such as the NVIDIA files after a GPU swap, is removed as long as it is unedited. `fedora-setup.sh` calls it during setup; run it standalone to re-apply system configs after editing them.
+
+### `scripts/lib/hw.sh` and `setup.conf`
+
+`hw.sh` holds the detection: GPUs by PCI vendor and device ID (which also picks the NVIDIA driver branch), desktop or laptop from the SMBIOS chassis type or a system battery, Windows from the UEFI boot list. `setup.conf` (copied from `setup.conf.example`) overrides it per machine: `FORM_FACTOR`, `NVIDIA_DRIVER` and the opt-in `AUDIO_TRIM`. `tests/hw-detect.sh` runs the detection against fixture trees for each kind of machine.
 
 ### `scripts/emulation-setup.sh`
 
@@ -810,17 +867,21 @@ Retro emulation setup — installs ES-DE (Terra repo) and the standalone emulato
 
 ### `scripts/sysinfo.sh` — alias: `sysinfo`
 
-Quick system health check in terminal. Shows CPU/GPU temps, load, RAM, disk, network, top processes, and warnings if anything exceeds 85%.
+Quick system health check in terminal. Shows CPU/GPU temps, load, RAM, disk (root plus anything mounted under `/mnt`), network, top processes, and warnings if anything exceeds 85%.
+
+### `scripts/hwstat.sh`
+
+One reading per call — `cpu-temp`, `gpu-name`, `gpu-temp`, `gpu-load`, `gpu-vram` — for Conky and `sysinfo.sh`. CPU temperature comes from `k10temp` (AMD) or `coretemp` (Intel). The GPU comes from `nvidia-smi` when the NVIDIA driver runs, otherwise from sysfs (AMD reports everything, Intel only a name). Fields it cannot read stay empty, and Conky leaves those lines out.
 
 ### `scripts/deep-health.sh`
 
-Full hardware audit: BIOS version and POST time, Secure Boot and MOK state, machine check counters, per-DIMM memory speed, temperatures, NVMe SMART plus a short self-test, btrfs error counters and scrub, NTFS state, GPU, failed units. `sysinfo.sh` is the glance; this is the check after a BIOS flash or when boot feels wrong. Takes around six minutes — the scrub and the self-test dominate.
+Full hardware audit: BIOS version and POST time, Secure Boot and MOK state, machine check counters, per-DIMM memory speed, temperatures, NVMe SMART plus a short self-test, btrfs error counters and scrub, NTFS state, GPU, failed units. `sysinfo.sh` is the glance; this is the check after a BIOS flash or when boot feels wrong. Takes around six minutes — the scrub and the self-test dominate. Sections that do not apply (no NVMe, no btrfs root, no NVIDIA GPU) are skipped.
 
-Firmware time above ~25s on this board means the embedded controller is wedged. A reboot and Load Optimized Defaults do not clear it; only a full standby power drain does — PSU switch off, hold the case power button 30 seconds.
+Firmware time far above normal (25 s or more on a desktop board) can mean the embedded controller is wedged. A reboot and Load Optimized Defaults do not clear it; only a full standby power drain does — PSU switch off, hold the case power button 30 seconds.
 
 ### `scripts/mok-reenroll.sh`
 
-Re-enrolls the akmods signing key. A BIOS flash clears UEFI NVRAM and takes the MOK list with it, so the locally signed NVIDIA modules fail signature verification, nouveau claims the card, and Plasma comes up to a black screen. The machine still boots to a TTY — run this from there, reboot, then pick Enroll MOK on the blue screen. Exits early if the key is still enrolled.
+Re-enrolls the akmods signing key. A BIOS flash clears UEFI NVRAM and takes the MOK list with it, so locally signed modules such as NVIDIA's fail signature verification. With NVIDIA, nouveau claims the card and Plasma comes up to a black screen. The machine still boots to a TTY — run this from there, reboot, then pick Enroll MOK on the blue screen. Exits early if the key is still enrolled or Secure Boot is off.
 
 ### `scripts/rice-start.sh` — alias: `rice`
 
@@ -830,9 +891,11 @@ Restarts Conky.
 
 ```bash
 mkdir -p ~/scripts
-cp scripts/rice-start.sh scripts/sysinfo.sh scripts/deep-health.sh scripts/mok-reenroll.sh ~/scripts/
-chmod +x ~/scripts/{rice-start,sysinfo,deep-health,mok-reenroll}.sh
+cp scripts/rice-start.sh scripts/sysinfo.sh scripts/hwstat.sh scripts/deep-health.sh scripts/mok-reenroll.sh ~/scripts/
+chmod +x ~/scripts/{rice-start,sysinfo,hwstat,deep-health,mok-reenroll}.sh
 ```
+
+Conky and `sysinfo.sh` expect `hwstat.sh` next to them in `~/scripts/`.
 
 Aliases (`rice`, `sysinfo`) are already in `configs/fish/config.fish` — deployed by `fedora-setup.sh`.
 
@@ -847,11 +910,13 @@ Run after full setup to confirm everything is working:
 uname -r
 mokutil --sb-state
 
-# NVIDIA
+# GPU — NVIDIA
 nvidia-smi
 lsmod | grep nvidia
+# GPU — any vendor: the VA-API driver in use
+vainfo 2>/dev/null | grep -i 'driver version'
 
-# CPU
+# CPU (desktop; a laptop shows powersave and balanced / balanced-battery)
 cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor  # performance
 tuned-adm active                                             # latency-performance
 
@@ -867,7 +932,7 @@ cat /proc/sys/vm/swappiness  # 180
 firewall-cmd --list-services  # dhcpv6-client
 
 # Temperature
-sensors | grep Tctl
+~/scripts/hwstat.sh cpu-temp
 
 # Rice
 pgrep conky && echo "Conky running"

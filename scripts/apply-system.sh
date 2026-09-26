@@ -1,8 +1,14 @@
 #!/bin/bash
-# Deploy all system/ files to their live system paths.
+# Deploy all system/ files to their live system paths. Hardware-specific files
+# follow scripts/lib/hw.sh and the overrides in setup.conf (see setup.conf.example).
 
 set -e
 cd "$(dirname "$0")/.."
+
+# shellcheck source=scripts/lib/hw.sh
+source scripts/lib/hw.sh
+# shellcheck disable=SC1091
+[ -f setup.conf ] && source ./setup.conf
 
 TEAL='\033[38;2;0;200;168m'
 RED='\033[38;2;170;28;28m'
@@ -12,11 +18,39 @@ ok()      { echo -e "  ${TEAL}✓${RESET} $1"; }
 warn()    { echo -e "  ${RED}!${RESET} $1"; }
 section() { echo -e "\n${TEAL}━━━ $1 ━━━${RESET}"; }
 
+# Remove a file an earlier run deployed once it no longer fits the hardware, but
+# only while it still matches the repo copy — an edited file is the owner's.
+retire() {  # repo-file live-path
+    if [ -f "$2" ] && cmp -s "$1" "$2"; then
+        sudo rm -f "$2"
+        ok "removed $2 (does not apply to this hardware)"
+    fi
+}
+
+FORM_FACTOR=$(hw_form_factor)
+NVIDIA_BRANCH=$(hw_nvidia_driver)
+section "Hardware"
+ok "$(hw_summary)"
+
 section "NVIDIA"
-sudo cp system/nvidia-performance.conf /etc/modprobe.d/nvidia-performance.conf
-sudo cp system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
-sudo systemctl enable nvidia-suspend nvidia-hibernate nvidia-resume
-ok "nvidia-performance.conf, nvidia-wayland.conf, suspend/resume services enabled"
+if [ -n "$NVIDIA_BRANCH" ]; then
+    sudo cp system/nvidia-performance.conf /etc/modprobe.d/nvidia-performance.conf
+    sudo systemctl enable nvidia-suspend nvidia-hibernate nvidia-resume
+    ok "nvidia-performance.conf, suspend/resume services enabled"
+    if hw_is_hybrid_laptop; then
+        # the panel hangs off the integrated GPU; forcing GLX, GBM and VA-API onto
+        # NVIDIA would keep the dGPU awake and can break the session
+        retire system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
+        ok "hybrid graphics: desktop stays on the integrated GPU (offload apps with switcherooctl launch)"
+    else
+        sudo cp system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
+        ok "nvidia-wayland.conf"
+    fi
+else
+    retire system/nvidia-performance.conf /etc/modprobe.d/nvidia-performance.conf
+    retire system/nvidia-wayland.conf /etc/environment.d/nvidia-wayland.conf
+    ok "no NVIDIA driver in use — skipped"
+fi
 
 section "sysctl / DNF / ZRAM"
 sudo cp system/99-tweaks.conf /etc/sysctl.d/99-tweaks.conf
@@ -30,21 +64,35 @@ sudo systemd-tmpfiles --create /etc/tmpfiles.d/hugepages.conf
 ok "99-tweaks.conf, 99-disable-modules.conf, dnf.conf, zram-generator.conf, hugepages.conf"
 
 section "Kernel parameters"
+KERNEL_ARGS="nowatchdog audit=1 audit_backlog_limit=8192 skew_tick=1 preempt=full"
+# desktops trade a little idle power for cache locality; laptops keep power-efficient workqueues
+[ "$FORM_FACTOR" = desktop ] && KERNEL_ARGS="$KERNEL_ARGS workqueue.power_efficient=false"
 sudo grubby --update-kernel=ALL --remove-args="nowatchdog audit=0 audit=1 audit_backlog_limit skew_tick=1 workqueue.power_efficient=false preempt=full" 2>/dev/null || true
-sudo grubby --update-kernel=ALL --args="nowatchdog audit=1 audit_backlog_limit=8192 skew_tick=1 workqueue.power_efficient=false preempt=full"
-ok "Kernel parameters set (takes effect on next boot)"
+sudo grubby --update-kernel=ALL --args="$KERNEL_ARGS"
+ok "Kernel parameters set for a $FORM_FACTOR (takes effect on next boot)"
 
 section "SCX scheduler"
 sudo mkdir -p /etc/scx_loader
-sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
-ok "scx_loader.toml"
+if [ "$FORM_FACTOR" = laptop ]; then
+    sudo cp system/scx_loader-laptop.toml /etc/scx_loader/config.toml
+    ok "scx_loader-laptop.toml (scx_bpfland, Auto mode)"
+else
+    sudo cp system/scx_loader.toml /etc/scx_loader/config.toml
+    ok "scx_loader.toml (scx_bpfland, Gaming mode)"
+fi
 
 section "tuned"
 sudo cp system/tuned-ppd.conf /etc/tuned/ppd.conf
-sudo tuned-adm profile latency-performance
-ok "tuned: PPD performance mapped to latency-performance"
+if [ "$FORM_FACTOR" = laptop ]; then
+    # keep tuned-ppd's battery-aware balanced default; Performance in the battery
+    # applet still maps to latency-performance
+    ok "tuned: balanced by default, PPD performance mapped to latency-performance"
+else
+    sudo tuned-adm profile latency-performance
+    ok "tuned: latency-performance; PPD performance mapped to latency-performance"
+fi
 
-section "udev rules"
+section "udev rules (device quirks, inert without the device)"
 sudo cp system/99-lamzu.rules /etc/udev/rules.d/99-lamzu.rules
 sudo cp system/99-disable-wakeup.rules /etc/udev/rules.d/99-disable-wakeup.rules
 sudo cp system/99-dualsense.rules /etc/udev/rules.d/99-dualsense.rules
@@ -94,7 +142,7 @@ ok "Firefox: telemetry, Studies, Pocket and sponsored content off; tracking prot
 section "libinput debounce"
 sudo mkdir -p /etc/libinput
 sudo cp system/libinput-overrides.quirks /etc/libinput/local-overrides.quirks
-ok "libinput-overrides.quirks"
+ok "libinput-overrides.quirks (debouncing off for LAMZU mice only)"
 
 section "NTSync"
 sudo cp system/ntsync.conf /etc/modules-load.d/ntsync.conf

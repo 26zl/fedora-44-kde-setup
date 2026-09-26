@@ -1,9 +1,16 @@
 #!/bin/bash
-# Fedora 44 KDE — Ryzen 9 9900X, RTX 5070, dual-boot Windows 11 Pro
+# Fedora 44 KDE post-install setup. Detects the hardware (scripts/lib/hw.sh) and
+# adapts to it: GPU drivers for NVIDIA, AMD or Intel, desktop or laptop tuning,
+# dual-boot handling. Overrides go in setup.conf (see setup.conf.example).
 # Run as regular user — sudo is called where needed
 
 set -e
 cd "$(dirname "$0")/.."
+
+# shellcheck source=scripts/lib/hw.sh
+source scripts/lib/hw.sh
+# shellcheck disable=SC1091
+[ -f setup.conf ] && source ./setup.conf
 
 TEAL='\033[38;2;0;200;168m'
 RED='\033[38;2;170;28;28m'
@@ -14,12 +21,16 @@ info() { echo -e "  ${TEAL}→${RESET} $1"; }
 warn() { echo -e "  ${RED}!${RESET} $1"; }
 section() { echo -e "\n${TEAL}━━━ $1 ━━━${RESET}"; }
 
+section "Hardware"
+NVIDIA_BRANCH=$(hw_nvidia_driver)
+ok "$(hw_summary)"
+
 section "DNF configuration"
 sudo cp system/dnf.conf /etc/dnf/dnf.conf
 ok "DNF configured (max 2 kernels, parallel downloads)"
 
 section "Locale debloat"
-# keep a langpack for every locale in use (e.g. nb_NO formats), not only English
+# keep a langpack for every locale in use (a regional LC_* locale too), not only English
 langs=$(locale | sed -n 's/^[A-Z_]*="\{0,1\}\([a-z]\{2,3\}\)_.*/\1/p' | sort -u)
 if rpm -q glibc-all-langpacks &>/dev/null; then
     sudo dnf swap -y glibc-all-langpacks glibc-langpack-en
@@ -50,9 +61,30 @@ sudo dnf install -y \
 sudo dnf config-manager setopt 'terra.includepkgs=terra-release,terra-gpg-keys,starship,emulationstation-de*'
 ok "COPR: scx-scheds, yazi, mise; Terra: starship, ES-DE"
 
-section "NVIDIA drivers"
-sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver
-ok "NVIDIA akmod drivers installed"
+section "GPU drivers"
+case "$NVIDIA_BRANCH" in
+    current)
+        sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda libva-nvidia-driver
+        ok "NVIDIA akmod drivers installed (current branch)"
+        ;;
+    580xx)
+        sudo dnf install -y akmod-nvidia-580xx xorg-x11-drv-nvidia-580xx-cuda libva-nvidia-driver
+        ok "NVIDIA akmod drivers installed (580xx branch for Maxwell, Pascal and Volta)"
+        ;;
+esac
+if [ -z "$NVIDIA_BRANCH" ] && [ "$(hw_nvidia_branch)" = none ]; then
+    warn "NVIDIA GPU older than Maxwell: no packaged driver supports it, staying on nouveau"
+fi
+# Fedora's Mesa and Intel VA-API drivers leave out the patented codecs; libva
+# loads RPM Fusion's builds (dri-freeworld, dri-nonfree) ahead of Fedora's
+if hw_has_gpu 1002; then
+    sudo dnf install -y mesa-va-drivers-freeworld
+    ok "AMD: VA-API with H.264/H.265 (mesa-va-drivers-freeworld)"
+fi
+if hw_has_gpu 8086; then
+    sudo dnf install -y intel-media-driver
+    ok "Intel: VA-API with H.264/H.265 (intel-media-driver)"
+fi
 
 section "System tools"
 sudo dnf install -y \
@@ -66,12 +98,13 @@ sudo dnf install -y \
     wl-clipboard \
     kvantum \
     conky \
+    jq \
+    pciutils \
+    libva-utils \
     tuned \
     scx-scheds \
     zram-generator \
-    lm_sensors \
-    snapper \
-    btrfs-assistant
+    lm_sensors
 ok "System tools installed"
 
 section "Terminal tools"
@@ -152,10 +185,10 @@ ok "System files deployed via apply-system.sh"
 
 section "SCX scheduler (gaming)"
 sudo systemctl enable --now scx_loader.service
-# scx_lavd fails to load on kernels whose BTF came from pahole <= 1.30 (Fedora
-# 7.1.x-7.2.6, fixed in 7.2.7); check CONFIG_PAHOLE_VERSION in /boot/config-*.
+# sched_ext schedulers fail to load on kernels whose BTF came from pahole <= 1.30
+# (Fedora 7.1.x-7.2.6, fixed in 7.2.7); check CONFIG_PAHOLE_VERSION in /boot/config-*.
 if [[ "$(cat /sys/kernel/sched_ext/state 2>/dev/null)" == "enabled" ]]; then
-    ok "scx_lavd Gaming mode active"
+    ok "sched_ext scheduler attached"
 else
     warn "scx_loader enabled but no scheduler attached — see journalctl -u scx_loader"
 fi
@@ -175,26 +208,30 @@ sudo firewall-cmd --permanent --zone=FedoraWorkstation --add-service=dhcpv6-clie
 sudo firewall-cmd --reload
 ok "Firewall hardened (dhcpv6-client only; ssh, samba-client, mdns, kdeconnect removed)"
 
-section "Dual-boot (RTC + GRUB default)"
+section "Clock and boot menu"
 sudo timedatectl set-local-rtc 0
-# GRUB re-picks the last-booted OS after a Windows hibernate wake; GRUB_SAVEDEFAULT requires GRUB_DEFAULT=saved
-grub_changed=0
-if ! grep -q '^GRUB_DEFAULT=saved' /etc/default/grub; then
-    if grep -q '^GRUB_DEFAULT=' /etc/default/grub; then
-        sudo sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
-    else
-        echo 'GRUB_DEFAULT=saved' | sudo tee -a /etc/default/grub >/dev/null
+if hw_has_windows; then
+    # GRUB re-picks the last-booted OS after a Windows hibernate wake; GRUB_SAVEDEFAULT requires GRUB_DEFAULT=saved
+    grub_changed=0
+    if ! grep -q '^GRUB_DEFAULT=saved' /etc/default/grub; then
+        if grep -q '^GRUB_DEFAULT=' /etc/default/grub; then
+            sudo sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
+        else
+            echo 'GRUB_DEFAULT=saved' | sudo tee -a /etc/default/grub >/dev/null
+        fi
+        grub_changed=1
     fi
-    grub_changed=1
+    if ! grep -q '^GRUB_SAVEDEFAULT=true' /etc/default/grub; then
+        echo 'GRUB_SAVEDEFAULT=true' | sudo tee -a /etc/default/grub >/dev/null
+        grub_changed=1
+    fi
+    if [[ $grub_changed -eq 1 ]]; then
+        sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+    fi
+    ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
+else
+    ok "RTC set to UTC; no Windows boot entry, GRUB default left alone"
 fi
-if ! grep -q '^GRUB_SAVEDEFAULT=true' /etc/default/grub; then
-    echo 'GRUB_SAVEDEFAULT=true' | sudo tee -a /etc/default/grub >/dev/null
-    grub_changed=1
-fi
-if [[ $grub_changed -eq 1 ]]; then
-    sudo grub2-mkconfig -o /boot/grub2/grub.cfg
-fi
-ok "RTC set to UTC (Windows must use UTC too); GRUB remembers last-booted OS"
 
 section "Disable ABRT crash reporters"
 sudo systemctl disable --now abrtd abrt-oops abrt-xorg abrt-journal-core 2>/dev/null || true
@@ -244,28 +281,38 @@ kwriteconfig6 --file kscreenlockerrc \
 ok "Lock screen wallpaper set"
 
 section "Snapper (BTRFS snapshots)"
-# guards need sudo — a plain user can't see root's snapper configs
-if ! sudo snapper list-configs | grep -q "^root"; then
-    sudo snapper -c root create-config / || warn "root config not created (subvolume already covered?)"
+if [ "$(findmnt -no FSTYPE /)" = btrfs ]; then
+    sudo dnf install -y snapper btrfs-assistant
+    # guards need sudo — a plain user can't see root's snapper configs
+    if ! sudo snapper list-configs | grep -q "^root"; then
+        sudo snapper -c root create-config / || warn "root config not created (subvolume already covered?)"
+    fi
+    if ! sudo snapper list-configs | grep -q "^home"; then
+        sudo snapper -c home create-config /home || warn "home config not created (subvolume already covered?)"
+    fi
+    if ! sudo snapper -c root list 2>/dev/null | grep -q "Initial clean setup"; then
+        sudo snapper -c root create --description "Initial clean setup" --cleanup-algorithm number || warn "root snapshot failed"
+    fi
+    if ! sudo snapper -c home list 2>/dev/null | grep -q "Initial home snapshot"; then
+        sudo snapper -c home create --description "Initial home snapshot" --cleanup-algorithm number || warn "home snapshot failed"
+    fi
+    sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+    ok "Snapper: root + home snapshots, timeline enabled"
+else
+    warn "root filesystem is not btrfs — Snapper skipped"
 fi
-if ! sudo snapper list-configs | grep -q "^home"; then
-    sudo snapper -c home create-config /home || warn "home config not created (subvolume already covered?)"
-fi
-if ! sudo snapper -c root list 2>/dev/null | grep -q "Initial clean setup"; then
-    sudo snapper -c root create --description "Initial clean setup" --cleanup-algorithm number || warn "root snapshot failed"
-fi
-if ! sudo snapper -c home list 2>/dev/null | grep -q "Initial home snapshot"; then
-    sudo snapper -c home create --description "Initial home snapshot" --cleanup-algorithm number || warn "home snapshot failed"
-fi
-sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
-ok "Snapper: root + home snapshots, timeline enabled"
 
 section "Audio (WirePlumber)"
-mkdir -p ~/.config/wireplumber/wireplumber.conf.d
-cp configs/wireplumber/wireplumber.conf.d/50-audio.conf \
-    ~/.config/wireplumber/wireplumber.conf.d/50-audio.conf
-systemctl --user restart wireplumber
-ok "WirePlumber: onboard, iGPU HDMI and webcam audio disabled"
+audio_conf=~/.config/wireplumber/wireplumber.conf.d/50-audio.conf
+# opt-in, but an install that already has the file keeps getting updates
+if [ "${AUDIO_TRIM:-no}" = yes ] || [ -f "$audio_conf" ]; then
+    mkdir -p "$(dirname "$audio_conf")"
+    cp configs/wireplumber/wireplumber.conf.d/50-audio.conf "$audio_conf"
+    systemctl --user restart wireplumber
+    ok "WirePlumber: onboard, iGPU HDMI and webcam audio disabled"
+else
+    ok "left at defaults (AUDIO_TRIM=yes in setup.conf hides onboard AMD audio, AMD iGPU HDMI and webcam mics)"
+fi
 
 section "Writing user configs"
 mkdir -p ~/.config/kitty ~/.config/conky \
@@ -286,8 +333,8 @@ cp configs/fish/functions/ya.fish ~/.config/fish/functions/ya.fish
 cp wallpaper/wallpaper.jpg ~/Pictures/wallpaper.jpg
 ok "User configs written"
 
-cp scripts/rice-start.sh scripts/sysinfo.sh scripts/deep-health.sh scripts/mok-reenroll.sh ~/scripts/
-chmod +x ~/scripts/{rice-start,sysinfo,deep-health,mok-reenroll}.sh
+cp scripts/rice-start.sh scripts/sysinfo.sh scripts/hwstat.sh scripts/deep-health.sh scripts/mok-reenroll.sh ~/scripts/
+chmod +x ~/scripts/{rice-start,sysinfo,hwstat,deep-health,mok-reenroll}.sh
 ok "Scripts installed to ~/scripts/"
 
 # ble.sh requires --noattach first and ble-attach last; configs/bashrc goes in between
@@ -308,17 +355,23 @@ systemctl --user enable --now conky.service
 ok "Conky systemd user service installed and enabled"
 
 section "Setup complete"
-warn "Before rebooting (Secure Boot):"
-echo "  1. Wait ~5 min for the NVIDIA kernel module to build, then:"
-echo "       sudo akmods --force && sudo dracut --force"
-echo "  2. Queue the MOK key: sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
-echo "     → reboot and pick 'Enroll MOK' at the blue MOK Manager screen"
-echo ""
+step=0
+next() { step=$((step + 1)); echo "  $step. $1"; }
+if [ -n "$NVIDIA_BRANCH" ]; then
+    warn "Before rebooting (NVIDIA):"
+    next "Wait ~5 min for the NVIDIA kernel module to build, then:"
+    echo "       sudo akmods --force && sudo dracut --force"
+    if mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+        next "Queue the MOK key: sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
+        echo "     → reboot and pick 'Enroll MOK' at the blue MOK Manager screen"
+    fi
+    echo ""
+fi
 warn "After reboot:"
-echo "  3. KDE Settings → Colors → DarthVader → Apply"
-echo "  4. KDE Settings → Application Style → kvantum → Apply"
-echo "  5. KDE Settings → Fonts → Fixed width → JetBrainsMono Nerd Font"
-echo "  6. KDE Settings → Wallpaper → ~/Pictures/wallpaper.jpg"
+next "KDE Settings → Colors → DarthVader → Apply"
+next "KDE Settings → Application Style → kvantum → Apply"
+next "KDE Settings → Fonts → Fixed width → JetBrainsMono Nerd Font"
+next "KDE Settings → Wallpaper → ~/Pictures/wallpaper.jpg"
 echo ""
 info "Conky runs as a systemd user service (systemctl --user status conky)"
 info "For retro emulation (ES-DE + PS1/PS2/PS3/Wii): bash scripts/emulation-setup.sh"

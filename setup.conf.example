@@ -1,0 +1,18 @@
+# Local overrides for scripts/fedora-setup.sh and scripts/apply-system.sh.
+# Copy to setup.conf (git-ignored) and uncomment what you need. Anything left
+# unset follows the hardware detection in scripts/lib/hw.sh.
+
+# desktop | laptop | auto. Desktops get the latency tuning (tuned
+# latency-performance, scx Gaming mode, workqueue.power_efficient=false);
+# laptops keep tuned's battery-aware balanced profile and scx Auto mode.
+#FORM_FACTOR=auto
+
+# NVIDIA driver branch: auto | current | 580xx | none. auto picks current for
+# Turing (RTX 20 / GTX 16) and newer, 580xx for Maxwell, Pascal and Volta, and
+# leaves older cards on nouveau.
+#NVIDIA_DRIVER=auto
+
+# yes: hide onboard AMD audio, AMD iGPU HDMI audio and webcam microphones from
+# PipeWire (configs/wireplumber/wireplumber.conf.d/50-audio.conf). Only makes
+# sense when all sound goes through another device, e.g. a USB headset.
+#AUDIO_TRIM=no
