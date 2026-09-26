@@ -2,23 +2,31 @@ name: Validate Configs
 
 on:
   push:
-    branches: ["*"]
+    branches: ["**"]
   pull_request:
-    branches: ["*"]
+    branches: ["**"]
   schedule:
     - cron: "0 6 * * 1"  # weekly, catches upstream package renames
 
 permissions:
   contents: read
 
+# Superseded runs on the same ref are pointless once a newer commit exists.
+concurrency:
+  group: "validate-${{ github.ref }}"
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: Validate config files
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Check no plaintext passwords or IPs in configs
         run: |
@@ -51,9 +59,12 @@ jobs:
 
       - name: Check shell scripts are executable-safe
         run: |
-          for f in scripts/*.sh system/kwin-display-fix.sh; do
+          for f in scripts/*.sh scripts/lib/*.sh tests/*.sh system/kwin-display-fix.sh; do
             bash -n "$f" && echo "$f: syntax OK" || exit 1
           done
+
+      - name: Run the hardware detection tests
+        run: bash tests/hw-detect.sh
 
       - name: Check every system/ file is deployed by apply-system.sh
         run: |
@@ -67,11 +78,14 @@ jobs:
   packages:
     name: Check every package the scripts install exists
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container: registry.fedoraproject.org/fedora:44
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Add the repos the scripts add
         run: |

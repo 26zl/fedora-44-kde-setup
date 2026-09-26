@@ -2,26 +2,28 @@ name: ShellCheck
 
 on:
   push:
-    branches: ["*"]
-    paths:
-      - "scripts/**"
-      - "**.sh"
+    branches: ["**"]
   pull_request:
-    branches: ["*"]
-    paths:
-      - "scripts/**"
-      - "**.sh"
+    branches: ["**"]
 
 permissions:
   contents: read
+
+# Superseded runs on the same ref are pointless once a newer commit exists.
+concurrency:
+  group: "shellcheck-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   shellcheck:
     name: Lint shell scripts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0

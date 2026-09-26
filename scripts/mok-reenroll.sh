@@ -1,6 +1,6 @@
 #!/bin/bash
 # Re-enroll the akmods signing key after a BIOS flash cleared the MOK list, which
-# leaves the NVIDIA modules unloadable under Secure Boot; run it from the TTY.
+# leaves akmods-built modules such as NVIDIA's unloadable under Secure Boot; run it from the TTY.
 
 set -e
 
@@ -21,12 +21,16 @@ if ! mokutil --sb-state 2>/dev/null | grep -qi enabled; then
 fi
 ok "Secure Boot enabled"
 
-if lsmod | grep -q '^nvidia'; then
-    ok "nvidia module already loaded"
-else
-    warn "nvidia module not loaded"
+NVIDIA=0
+lspci -n 2>/dev/null | grep -Eq ' 03[0-9a-f]{2}: 10de:' && NVIDIA=1
+if [ "$NVIDIA" -eq 1 ]; then
+    if lsmod | grep -q '^nvidia'; then
+        ok "nvidia module already loaded"
+    else
+        warn "nvidia module not loaded"
+    fi
 fi
-lspci -k | grep -A3 -i 'VGA' | grep 'Kernel driver' | sed 's/^\s*/  /' || true
+lspci -k | grep -A3 -Ei 'VGA|3D controller|Display controller' | grep 'Kernel driver' | sed 's/^\s*/  /' || true
 
 KEY=""
 for candidate in /etc/pki/akmods/certs/public_key.der /etc/pki/akmods/certs/*.der; do
@@ -37,7 +41,7 @@ echo "  key: $KEY"
 
 if mokutil --test-key "$KEY" 2>/dev/null | grep -q "already enrolled"; then
     ok "key is already enrolled — nothing to do"
-    if ! lsmod | grep -q '^nvidia'; then
+    if [ "$NVIDIA" -eq 1 ] && ! lsmod | grep -q '^nvidia'; then
         warn "but nvidia is not loaded, so the problem is elsewhere: check 'dmesg | grep -i nvidia'"
     fi
     exit 0
@@ -49,7 +53,7 @@ section "Enrollment"
 cat <<'INFO'
   You will now set a ONE-TIME password, entered twice. It is used once at the
   next boot and then discarded. Use digits only, e.g. 12345678 — the MOK screen
-  is US layout, so Norwegian keys land in the wrong place.
+  is US layout, so letters on other keyboard layouts land in the wrong place.
 
   After this finishes, reboot. A blue "Shim UEFI key management" screen appears
   and waits about 10 seconds:

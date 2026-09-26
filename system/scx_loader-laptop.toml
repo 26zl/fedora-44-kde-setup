@@ -1,0 +1,4 @@
+# Laptop variant of scx_loader.toml: Auto mode instead of Gaming, which keeps
+# tasks on the fastest cores at the cost of battery. Same scx_lavd note applies.
+default_sched = "scx_bpfland"
+default_mode = "Auto"

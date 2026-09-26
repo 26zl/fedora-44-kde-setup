@@ -24,16 +24,16 @@ section "Firmware"
 echo "  board       $(dmidecode -s baseboard-product-name)"
 echo "  BIOS        $(dmidecode -s bios-version)  ($(dmidecode -s bios-release-date))"
 systemd-analyze time 2>/dev/null | head -1 | sed 's/^/  /' || true
-# Firmware time above ~25s on this board means the EC is wedged — a full standby
-# power drain (PSU switch off, hold power button 30s) is the only thing that clears it.
+# firmware time far above normal can mean a wedged embedded controller; only a full power drain clears it
 SB=$(mokutil --sb-state 2>/dev/null | head -1 || true)
 echo "  ${SB:-Secure Boot state unknown}"
+# only exists once akmods has built a module (NVIDIA and the like)
 for key in /etc/pki/akmods/certs/public_key.der /etc/pki/akmods/certs/*.der; do
     [ -f "$key" ] || continue
     if mokutil --test-key "$key" 2>/dev/null | grep -q "already enrolled"; then
         ok "akmods signing key enrolled"
     else
-        warn "akmods key NOT enrolled — run mok-reenroll.sh, or NVIDIA modules will not load"
+        warn "akmods key NOT enrolled — run mok-reenroll.sh, or akmods-built modules (NVIDIA) will not load"
     fi
     break
 done
@@ -59,19 +59,20 @@ dmidecode -t memory | awk '
     /^\tPart Number:/      { part=$3 }
     /^$/ && size != "" && size !~ /No/ { printf "  %-8s %-6s rated %s MT/s, running %s MT/s\n", size, part, speed, conf }
 '
-# Consumer DDR5 exposes no EDAC counters, so an empty mc directory is normal, not a fault
+# Without ECC memory there are no EDAC counters, so an empty mc directory is normal, not a fault
 EDAC=0
 for mc in /sys/devices/system/edac/mc/mc*; do
     [ -d "$mc" ] || continue
     EDAC=1
     echo "  $(basename "$mc")  CE=$(cat "$mc/ce_count") UE=$(cat "$mc/ue_count")"
 done
-[ "$EDAC" -eq 1 ] || echo "  no EDAC counters (expected on non-ECC DDR5)"
+[ "$EDAC" -eq 1 ] || echo "  no EDAC counters (expected without ECC memory)"
 free -h | sed 's/^/  /'
 
 section "Temperatures"
 if command -v sensors >/dev/null; then
-    sensors 2>/dev/null | grep -E 'Tctl|Tccd|Composite|^edge|^temp[0-9]' | sed 's/^/  /' || true
+    # Tctl/Tccd: AMD (k10temp), Package id: Intel (coretemp), Composite: NVMe, edge: AMD GPU
+    sensors 2>/dev/null | grep -E 'Tctl|Tccd|Package id|Composite|^edge|^temp[0-9]' | sed 's/^/  /' || true
 else
     warn "lm_sensors not installed"
 fi
@@ -100,7 +101,7 @@ if [ -n "$NVME" ]; then
         *)                 warn "self-test: $RESULT" ;;
     esac
 else
-    warn "no NVMe device found"
+    echo "  no NVMe device — SMART self-test skipped (it covers NVMe only)"
 fi
 
 section "Filesystems"
@@ -124,14 +125,17 @@ for part in "${NTFS[@]}"; do
 done
 
 section "GPU"
-if command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null 2>&1; then
-    nvidia-smi --query-gpu=name,driver_version,temperature.gpu,power.draw,memory.used,memory.total \
-        --format=csv,noheader 2>/dev/null | sed 's/^/  /' || true
-    ok "nvidia driver bound"
-else
-    warn "nvidia-smi not responding — check the driver and the MOK enrollment above"
+lspci 2>/dev/null | grep -Ei 'VGA compatible|3D controller|Display controller' | cut -d' ' -f2- | sed 's/^/  /' || true
+if lspci -n 2>/dev/null | grep -Eq ' 03[0-9a-f]{2}: 10de:'; then
+    if command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null 2>&1; then
+        nvidia-smi --query-gpu=name,driver_version,temperature.gpu,power.draw,memory.used,memory.total \
+            --format=csv,noheader 2>/dev/null | sed 's/^/  /' || true
+        ok "nvidia driver bound"
+    else
+        warn "nvidia-smi not responding — check the driver and the MOK enrollment above"
+    fi
 fi
-lspci -k | grep -A3 -i 'VGA' | grep 'Kernel driver' | sed 's/^\s*/  /' || true
+lspci -k | grep -A3 -Ei 'VGA|3D controller|Display controller' | grep 'Kernel driver' | sed 's/^\s*/  /' || true
 
 section "Fedora"
 FAILED=$(systemctl --failed --no-legend --no-pager | grep -c . || true)
@@ -148,7 +152,7 @@ if [ "$ERRLINES" -gt 0 ]; then
 fi
 echo "  SELinux: $(getenforce 2>/dev/null || echo unknown)"
 TAINT=$(cat /proc/sys/kernel/tainted)
-# 4096 is the out-of-tree bit, set by the NVIDIA module — anything else is worth a look
+# 4096 is the out-of-tree bit, set by modules such as NVIDIA's — anything else is worth a look
 if [ "$TAINT" -eq 0 ] || [ "$TAINT" -eq 4096 ]; then
     ok "kernel taint $TAINT"
 else
